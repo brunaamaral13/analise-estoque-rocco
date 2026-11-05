@@ -1,6 +1,8 @@
 (() => {
   const RANK_FILE = "Mais vendidos Rocco.csv";
   const IDLE_DAYS = 90;
+  const IDLE_DAYS_LONG = 180;
+  const TOP_SALDO_RANK = 150;
 
   const els = {
     rankMeta: document.getElementById("rankMeta"),
@@ -10,16 +12,22 @@
     clientBar: document.getElementById("clientBar"),
     clientSelect: document.getElementById("clientSelect"),
     clientQuery: document.getElementById("clientQuery"),
-    clientList: document.getElementById("clientList"),
     clientMeta: document.getElementById("clientMeta"),
     sideKpis: document.getElementById("sideKpis"),
     kpiMatch: document.getElementById("kpiMatch"),
     kpiZero: document.getElementById("kpiZero"),
     kpiIdle: document.getElementById("kpiIdle"),
+    kpiIdle180: document.getElementById("kpiIdle180"),
     topSub: document.getElementById("topSub"),
     q: document.getElementById("q"),
+    summary: document.getElementById("summary"),
+    sumIsbns: document.getElementById("sumIsbns"),
+    sumVolume: document.getElementById("sumVolume"),
+    sumValue: document.getElementById("sumValue"),
     filters: document.getElementById("filters"),
     emptyState: document.getElementById("emptyState"),
+    emptyTitle: document.getElementById("emptyTitle"),
+    emptyText: document.getElementById("emptyText"),
     grid: document.getElementById("grid"),
     tbody: document.getElementById("tbody"),
   };
@@ -33,6 +41,8 @@
     clientQuery: "",
     filter: "all",
     query: "",
+    sortKey: "ranking",
+    sortDir: "asc",
   };
 
   function normalizeIsbn(value) {
@@ -54,7 +64,7 @@
   }
 
   function money(value) {
-    if (value == null) return "—";
+    if (value == null) return "â€”";
     return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   }
 
@@ -120,7 +130,7 @@
       const code = ch.charCodeAt(0);
       if (ch === "\uFFFD") score -= 50;
       else if (
-        "áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ".includes(ch) ||
+        "Ã¡Ã Ã¢Ã£Ã©ÃªÃ­Ã³Ã´ÃµÃºÃ§ÃÃ€Ã‚ÃƒÃ‰ÃŠÃÃ“Ã”Ã•ÃšÃ‡".includes(ch) ||
         (code >= 0xc0 && code <= 0xff)
       ) {
         score += 3;
@@ -159,11 +169,11 @@
         .filter((r) => r.isbn && r.ranking != null && r.ranking > 0)
         .sort((a, b) => a.ranking - b.ranking);
 
-      const last = state.ranking.at(-1)?.ranking || "—";
-      els.rankMeta.textContent = `${state.ranking.length.toLocaleString("pt-BR")} títulos no ranking (1 a ${last})`;
+      const last = state.ranking.at(-1)?.ranking || "â€”";
+      els.rankMeta.textContent = `${state.ranking.length.toLocaleString("pt-BR")} tÃ­tulos no ranking (1 a ${last})`;
     } catch (err) {
       console.error(err);
-      els.rankMeta.textContent = "Não foi possível carregar o ranking. Abra o dashboard por um servidor local (não pelo file://).";
+      els.rankMeta.textContent = "NÃ£o foi possÃ­vel carregar o ranking. Abra o dashboard por um servidor local (nÃ£o pelo file://).";
     }
   }
 
@@ -180,18 +190,27 @@
           titulo: r.titulo || "",
           preco: parseNumber(r.preco),
           consignado: 0,
+          valorLiquido: 0,
           fdias: null,
           vendido: 0,
         };
 
-        prev.consignado += parseIntSafe(r.consignado) || 0;
+        const qty = parseIntSafe(r.consignado) || 0;
+        const preco = parseNumber(r.preco);
+        const desconto = parseNumber(r.perdesconto) || 0;
+        const fator = Math.max(0, 1 - desconto / 100);
+
+        prev.consignado += qty;
         prev.vendido += parseIntSafe(r.vendido) || 0;
+        if (preco != null && qty) {
+          prev.valorLiquido += preco * qty * fator;
+        }
 
         const fdias = parseIntSafe(r.fdias);
         if (fdias != null) {
           prev.fdias = prev.fdias == null ? fdias : Math.max(prev.fdias, fdias);
         }
-        if (prev.preco == null) prev.preco = parseNumber(r.preco);
+        if (prev.preco == null) prev.preco = preco;
         if (!prev.titulo) prev.titulo = r.titulo || "";
 
         map.set(isbn, prev);
@@ -225,48 +244,204 @@
     });
   }
 
-  function situation(stock) {
-    if (!stock) return { key: "miss", label: "Fora do Mapão", className: "badge-miss" };
-    if ((stock.consignado || 0) <= 0) return { key: "zero", label: "Sem estoque", className: "badge-zero" };
+  function situation(stock, ranking) {
+      if (!stock) {
+      if (ranking != null) {
+        return {
+          key: "rupture",
+          label: "Em ruptura,<br>repor com urgÃªncia",
+          className: "badge-urgent",
+        };
+      }
+      return { key: "miss", label: "Fora do MapÃ£o", className: "badge-miss" };
+    }
+
+    const saldo = stock.consignado || 0;
+    const inTop150 = ranking != null && ranking >= 1 && ranking <= TOP_SALDO_RANK;
+
+    if (inTop150) {
+      if (saldo <= 0) return { key: "zero", label: "Sem estoque", className: "badge-zero" };
+      if (saldo <= 3) return { key: "urgent", label: "Repor com<br>urgÃªncia", className: "badge-urgent" };
+      if (saldo <= 7) return { key: "alert", label: "Alerta<br>reposiÃ§Ã£o", className: "badge-alert" };
+      return { key: "ok", label: "Com saldo", className: "badge-ok" };
+    }
+
+    if (saldo <= 0) return { key: "zero", label: "Sem estoque", className: "badge-zero" };
     if ((stock.fdias || 0) >= IDLE_DAYS) return { key: "idle", label: "Parado", className: "badge-idle" };
     return { key: "ok", label: "Com estoque", className: "badge-ok" };
+  }
+
+  function rankingIsbnSet() {
+    return new Set(state.ranking.map((item) => item.isbn));
+  }
+
+  function buildAllRows() {
+    const rankedIsbns = rankingIsbnSet();
+
+    const ranked = state.ranking.map((item) => {
+      const stock = state.stockByIsbn.get(item.isbn) || null;
+      return {
+        isbn: item.isbn,
+        titulo: item.titulo,
+        autor: item.autor || "",
+        ranking: item.ranking,
+        inRanking: true,
+        stock,
+        sit: situation(stock, item.ranking),
+      };
+    });
+
+    const extras = [...state.stockByIsbn.values()]
+      .filter((stock) => !rankedIsbns.has(stock.isbn))
+      .map((stock) => ({
+        isbn: stock.isbn,
+        titulo: stock.titulo || "Sem tÃ­tulo",
+        autor: "",
+        ranking: null,
+        inRanking: false,
+        stock,
+        sit: situation(stock, null),
+      }))
+      .sort((a, b) => {
+        const saldoDiff = (b.stock.consignado || 0) - (a.stock.consignado || 0);
+        if (saldoDiff !== 0) return saldoDiff;
+        return (b.stock.fdias || 0) - (a.stock.fdias || 0);
+      });
+
+    return ranked.concat(extras);
+  }
+
+  function sortValue(row, key) {
+    switch (key) {
+      case "ranking":
+        return row.inRanking ? row.ranking : Number.POSITIVE_INFINITY;
+      case "titulo":
+        return (row.titulo || "").toLocaleLowerCase("pt-BR");
+      case "isbn":
+        return row.isbn || "";
+      case "preco":
+        return row.stock?.preco == null ? Number.NEGATIVE_INFINITY : row.stock.preco;
+      case "saldo":
+        return row.stock?.consignado == null ? Number.NEGATIVE_INFINITY : row.stock.consignado;
+      case "fdias":
+        return row.stock?.fdias == null ? Number.NEGATIVE_INFINITY : row.stock.fdias;
+      case "vendido":
+        return row.stock?.vendido == null ? Number.NEGATIVE_INFINITY : row.stock.vendido;
+      case "situacao":
+        return String(row.sit?.label || "").replace(/<br\s*\/?>/gi, " ");
+      default:
+        return 0;
+    }
+  }
+
+  function compareRows(a, b) {
+    const av = sortValue(a, state.sortKey);
+    const bv = sortValue(b, state.sortKey);
+    let cmp = 0;
+
+    if (typeof av === "string" || typeof bv === "string") {
+      cmp = String(av).localeCompare(String(bv), "pt-BR", { numeric: true, sensitivity: "base" });
+    } else {
+      cmp = av - bv;
+    }
+
+    if (cmp === 0) {
+      const ar = a.inRanking ? a.ranking : Number.POSITIVE_INFINITY;
+      const br = b.inRanking ? b.ranking : Number.POSITIVE_INFINITY;
+      cmp = ar - br;
+      if (cmp === 0) cmp = String(a.titulo || "").localeCompare(String(b.titulo || ""), "pt-BR");
+    }
+
+    return state.sortDir === "asc" ? cmp : -cmp;
   }
 
   function rowsForRender() {
     const q = state.query.trim().toLowerCase();
 
-    return state.ranking
-      .map((item) => {
-        const stock = state.stockByIsbn.get(item.isbn) || null;
-        const sit = situation(stock);
-        return { ...item, stock, sit };
-      })
+    return buildAllRows()
       .filter((row) => {
-        if (state.filter === "com" && row.sit.key !== "ok" && row.sit.key !== "idle") return false;
-        if (state.filter === "sem" && row.sit.key !== "zero") return false;
-        if (state.filter === "parado" && row.sit.key !== "idle") return false;
+        if (state.filter === "ranking" && !row.inRanking) return false;
+        if (state.filter === "extra" && row.inRanking) return false;
+        if (
+          state.filter === "com"
+          && !["ok", "idle", "alert", "urgent"].includes(row.sit.key)
+        ) return false;
+        if (
+          state.filter === "sem"
+          && row.sit.key !== "zero"
+          && row.sit.key !== "rupture"
+        ) return false;
+        if (state.filter === "urgent" && row.sit.key !== "urgent") return false;
+        if (state.filter === "alert" && row.sit.key !== "alert") return false;
+        if (state.filter === "parado90" && (row.stock?.fdias || 0) < IDLE_DAYS) return false;
+        if (state.filter === "parado180" && (row.stock?.fdias || 0) < IDLE_DAYS_LONG) return false;
         if (!q) return true;
         const blob = `${row.titulo} ${row.autor} ${row.isbn}`.toLowerCase();
         return blob.includes(q);
-      });
+      })
+      .sort(compareRows);
+  }
+
+  function updateSortHeaders() {
+    els.grid.querySelectorAll("th.sortable").forEach((th) => {
+      const key = th.dataset.sort;
+      const active = key === state.sortKey;
+      th.setAttribute("aria-sort", active ? (state.sortDir === "asc" ? "ascending" : "descending") : "none");
+      th.classList.toggle("is-sorted", active);
+      th.classList.toggle("is-asc", active && state.sortDir === "asc");
+      th.classList.toggle("is-desc", active && state.sortDir === "desc");
+    });
   }
 
   function updateKpis() {
     let match = 0;
     let zero = 0;
-    let idle = 0;
+    let idle90 = 0;
+    let idle180 = 0;
+    const rankedIsbns = rankingIsbnSet();
 
     state.ranking.forEach((item) => {
       const stock = state.stockByIsbn.get(item.isbn);
-      if (!stock) return;
+      if (!stock) {
+        zero += 1;
+        return;
+      }
       match += 1;
       if ((stock.consignado || 0) <= 0) zero += 1;
-      else if ((stock.fdias || 0) >= IDLE_DAYS) idle += 1;
+      if ((stock.fdias || 0) >= IDLE_DAYS) idle90 += 1;
+      if ((stock.fdias || 0) >= IDLE_DAYS_LONG) idle180 += 1;
+    });
+
+    state.stockByIsbn.forEach((stock, isbn) => {
+      if (rankedIsbns.has(isbn)) return;
+      if ((stock.consignado || 0) <= 0) zero += 1;
+      if ((stock.fdias || 0) >= IDLE_DAYS) idle90 += 1;
+      if ((stock.fdias || 0) >= IDLE_DAYS_LONG) idle180 += 1;
     });
 
     els.kpiMatch.textContent = match.toLocaleString("pt-BR");
     els.kpiZero.textContent = zero.toLocaleString("pt-BR");
-    els.kpiIdle.textContent = idle.toLocaleString("pt-BR");
+    els.kpiIdle.textContent = idle90.toLocaleString("pt-BR");
+    els.kpiIdle180.textContent = idle180.toLocaleString("pt-BR");
+  }
+
+  function updateSummary(rows) {
+    let isbns = 0;
+    let volume = 0;
+    let valor = 0;
+
+    rows.forEach((row) => {
+      if (!row.stock) return;
+      const qty = row.stock.consignado || 0;
+      if (qty <= 0) return;
+      isbns += 1;
+      volume += qty;
+      valor += row.stock.valorLiquido || 0;
+    });
+
+    els.sumIsbns.textContent = isbns.toLocaleString("pt-BR");
+    els.sumVolume.textContent = volume.toLocaleString("pt-BR");
+    els.sumValue.textContent = money(valor);
   }
 
   function renderClientPicker() {
@@ -276,42 +451,32 @@
 
     const list = filteredClients();
     const selectedCode = state.selectedClient?.codigo || "";
-
-    els.clientSelect.innerHTML = list.length
+    const placeholderSelected = selectedCode ? "" : " selected";
+    const options = list.length
       ? list
         .map((c) => {
-          const label = `${c.codigo} · ${c.nome}`;
+          const label = `${c.codigo} Â· ${c.nome}`;
           const selected = c.codigo === selectedCode ? " selected" : "";
           return `<option value="${escapeHtml(c.codigo)}"${selected}>${escapeHtml(label)}</option>`;
         })
         .join("")
-      : `<option value="">Nenhum cliente encontrado</option>`;
+      : `<option value="" disabled>Nenhum cliente encontrado</option>`;
 
-    if (list.length && !list.some((c) => c.codigo === selectedCode)) {
-      els.clientSelect.value = list[0].codigo;
-    }
+    els.clientSelect.innerHTML = `<option value=""${placeholderSelected}>Selecione um cliente</option>${options}`;
+    els.clientSelect.value = selectedCode;
+  }
 
-    els.clientList.innerHTML = list.length
-      ? list
-        .slice(0, 40)
-        .map((c) => {
-          const active = c.codigo === selectedCode ? " is-active" : "";
-          const place = [c.cidade, c.estado].filter(Boolean).join("/");
-          return `
-            <button type="button" class="client-chip${active}" data-code="${escapeHtml(c.codigo)}" role="option" aria-selected="${c.codigo === selectedCode}">
-              <strong>${escapeHtml(c.codigo)}</strong>
-              <span>${escapeHtml(c.nome)}${place ? ` · ${escapeHtml(place)}` : ""}</span>
-            </button>
-          `;
-        })
-        .join("")
-      : `<p class="client-list-empty">Nenhum cliente com esse código ou nome.</p>`;
+  function updateEmptyState() {
+    if (state.selectedClient) return;
 
-    if (list.length > 40) {
-      els.clientList.insertAdjacentHTML(
-        "beforeend",
-        `<p class="client-list-empty">Mostrando 40 de ${list.length}. Refine a pesquisa.</p>`
-      );
+    if (state.clients.length) {
+      els.emptyTitle.textContent = "Escolha um cliente";
+      els.emptyText.textContent = `MapÃ£o importado com ${state.clients.length.toLocaleString("pt-BR")} cliente(s). Use a busca ou a lista acima para selecionar e carregar o cruzamento.`;
+      els.topSub.textContent = "Selecione um cliente para analisar o estoque.";
+    } else {
+      els.emptyTitle.textContent = "EsboÃ§o pronto para o cruzamento";
+      els.emptyText.textContent = "A lista de mais vendidos jÃ¡ entra fixa. Importe o CSV do MapÃ£o e escolha o cliente para ver o saldo e os dias sem giro.";
+      els.topSub.textContent = "Importe o MapÃ£o do cliente para ver o saldo ao lado do ranking Rocco.";
     }
   }
 
@@ -319,38 +484,47 @@
     const hasClient = Boolean(state.selectedClient);
     els.emptyState.hidden = hasClient;
     els.grid.hidden = !hasClient;
+    els.summary.hidden = !hasClient;
     els.filters.hidden = !hasClient;
     els.sideKpis.hidden = !hasClient;
     els.q.disabled = !hasClient;
 
     renderClientPicker();
+    updateEmptyState();
 
     if (!hasClient) return;
 
     updateKpis();
+    updateSortHeaders();
     const rows = rowsForRender();
+    updateSummary(rows);
     els.tbody.innerHTML = rows.map((row) => {
       const saldo = row.stock ? row.stock.consignado : null;
       const fdias = row.stock ? row.stock.fdias : null;
       const vendido = row.stock ? row.stock.vendido : null;
       const preco = row.stock?.preco;
       const rowClass = [
-        row.sit.key === "zero" ? "row-zero" : "",
+        row.sit.key === "zero" || row.sit.key === "urgent" || row.sit.key === "rupture" ? "row-zero" : "",
+        row.sit.key === "alert" ? "row-alert" : "",
         row.sit.key === "idle" ? "row-idle" : "",
       ].filter(Boolean).join(" ");
 
+      const rankCell = row.inRanking
+        ? row.ranking
+        : `<span class="rank-extra">Fora</span>`;
+
       return `
-        <tr class="${rowClass}">
-          <td class="num">${row.ranking}</td>
+        <tr class="${rowClass}${row.inRanking ? "" : " row-extra"}">
+          <td class="num">${rankCell}</td>
           <td>
-            <span class="title">${escapeHtml(row.titulo)}</span>
-            <span class="author">${escapeHtml(row.autor || "—")}</span>
+            <span class="title" title="${escapeHtml(row.titulo)}">${escapeHtml(row.titulo)}</span>
+            <span class="author" title="${escapeHtml(row.autor || "")}">${escapeHtml(row.autor || (row.inRanking ? "â€”" : "Somente no MapÃ£o"))}</span>
           </td>
           <td><span class="isbn">${escapeHtml(row.isbn)}</span></td>
           <td class="num">${money(preco)}</td>
-          <td class="num ${saldo === 0 ? "saldo-zero" : ""}">${saldo == null ? "—" : saldo.toLocaleString("pt-BR")}</td>
-          <td class="num fdias">${fdias == null ? "—" : fdias.toLocaleString("pt-BR")}</td>
-          <td class="num">${vendido == null ? "—" : vendido.toLocaleString("pt-BR")}</td>
+          <td class="num ${saldo === 0 ? "saldo-zero" : ""}">${saldo == null ? "â€”" : saldo.toLocaleString("pt-BR")}</td>
+          <td class="num fdias">${fdias == null ? "â€”" : fdias.toLocaleString("pt-BR")}</td>
+          <td class="num">${vendido == null ? "â€”" : vendido.toLocaleString("pt-BR")}</td>
           <td><span class="badge ${row.sit.className}">${row.sit.label}</span></td>
         </tr>
       `;
@@ -366,12 +540,13 @@
   }
 
   function selectClient(code) {
-    const client = state.clients.find((c) => c.codigo === String(code));
+    const client = String(code || "")
+      ? state.clients.find((c) => c.codigo === String(code))
+      : null;
     state.selectedClient = client || null;
     if (!client) {
       state.stockByIsbn = new Map();
       els.clientMeta.textContent = "";
-      els.topSub.textContent = "Importe o Mapão do cliente para ver o saldo ao lado do ranking Rocco.";
       render();
       return;
     }
@@ -379,9 +554,9 @@
     state.stockByIsbn = buildClientStock(state.mapaRows, client.codigo);
     const place = [client.cidade, client.estado].filter(Boolean).join("/");
     els.clientMeta.textContent = place
-      ? `Código ${client.codigo} · ${place}`
-      : `Código ${client.codigo}`;
-    els.topSub.textContent = `${client.nome} · ranking Rocco com saldo do Mapão`;
+      ? `CÃ³digo ${client.codigo} Â· ${place}`
+      : `CÃ³digo ${client.codigo}`;
+    els.topSub.textContent = `${client.nome} Â· ranking Rocco com saldo do MapÃ£o`;
     render();
   }
 
@@ -393,10 +568,13 @@
     state.mapaRows = rows;
     state.clients = listClients(rows);
     state.clientQuery = "";
+    state.selectedClient = null;
+    state.stockByIsbn = new Map();
     els.clientQuery.value = "";
-    els.mapaMeta.textContent = `${file.name} · ${rows.length.toLocaleString("pt-BR")} linhas · ${state.clients.length} cliente(s)`;
+    els.clientMeta.textContent = "";
+    els.mapaMeta.textContent = `${file.name} Â· ${rows.length.toLocaleString("pt-BR")} linhas Â· ${state.clients.length} cliente(s)`;
 
-    selectClient(state.clients[0]?.codigo);
+    render();
   }
 
   els.btnImport.addEventListener("click", () => els.fileMapa.click());
@@ -407,7 +585,7 @@
       await onMapaFile(file);
     } catch (err) {
       console.error(err);
-      els.mapaMeta.textContent = "Falha ao ler o CSV do Mapão.";
+      els.mapaMeta.textContent = "Falha ao ler o CSV do MapÃ£o.";
     }
   });
 
@@ -415,11 +593,6 @@
   els.clientQuery.addEventListener("input", (e) => {
     state.clientQuery = e.target.value;
     renderClientPicker();
-  });
-  els.clientList.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-code]");
-    if (!btn) return;
-    selectClient(btn.dataset.code);
   });
 
   els.q.addEventListener("input", (e) => {
@@ -434,6 +607,22 @@
     els.filters.querySelectorAll(".chip").forEach((chip) => {
       chip.classList.toggle("is-active", chip === btn);
     });
+    render();
+  });
+
+  els.grid.querySelector("thead").addEventListener("click", (e) => {
+    const th = e.target.closest("th.sortable");
+    if (!th) return;
+    const key = th.dataset.sort;
+    if (!key) return;
+
+    if (state.sortKey === key) {
+      state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+    } else {
+      state.sortKey = key;
+      state.sortDir = key === "titulo" || key === "isbn" || key === "situacao" ? "asc" : "desc";
+      if (key === "ranking") state.sortDir = "asc";
+    }
     render();
   });
 

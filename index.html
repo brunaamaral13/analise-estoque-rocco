@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rocco · Análise de estoque</title>
+  <title>Rocco Â· AnÃ¡lise de estoque</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Outfit:wght@360;460;560;650&display=swap" rel="stylesheet">
@@ -15,23 +15,23 @@
     <aside class="sidebar">
       <div class="brand">
         <img src="logo-rocco.png" alt="Editora Rocco" width="184" height="50">
-        <small>Análise de estoque</small>
+        <small>AnÃ¡lise de estoque</small>
       </div>
 
       <section class="panel">
         <p class="panel-label">Base Rocco</p>
         <p class="panel-title">Mais vendidos</p>
-        <p class="panel-meta" id="rankMeta">Carregando ranking fixo…</p>
-        <p class="panel-note">Atualizado só por você. Vendedores não editam esta lista.</p>
+        <p class="panel-meta" id="rankMeta">Carregando ranking fixoâ€¦</p>
+        <p class="panel-note">Atualizado sÃ³ por vocÃª. Vendedores nÃ£o editam esta lista.</p>
       </section>
 
       <section class="panel panel-import">
         <p class="panel-label">Cliente</p>
-        <p class="panel-title">Importar Mapão</p>
+        <p class="panel-title">Importar MapÃ£o</p>
         <p class="panel-meta" id="mapaMeta">Nenhum arquivo importado</p>
         <button type="button" class="btn-import" id="btnImport">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10"/><path d="m8 8 4-4 4 4"/><path d="M5 20h14"/></svg>
-          Importar CSV do Mapão
+          Importar CSV do MapÃ£o
         </button>
         <input id="fileMapa" type="file" accept=".csv,text/csv" hidden>
       </section>
@@ -42,12 +42,16 @@
           <strong id="kpiMatch">0</strong>
         </div>
         <div>
-          <span>Sem estoque</span>
+          <span>Sem estoque<br>ISBNs</span>
           <strong id="kpiZero">0</strong>
         </div>
         <div>
-          <span>Parados 90+ dias</span>
+          <span>Parados<br>90+ dias</span>
           <strong id="kpiIdle">0</strong>
+        </div>
+        <div>
+          <span>Parados<br>180+ dias</span>
+          <strong id="kpiIdle180">0</strong>
         </div>
       </div>
     </aside>
@@ -55,57 +59,77 @@
     <main class="main">
       <section class="client-bar" id="clientBar" hidden>
         <div class="client-bar-head">
-          <p class="client-bar-label">Cliente em análise</p>
+          <p class="client-bar-label">Cliente em anÃ¡lise</p>
           <p class="client-bar-meta" id="clientMeta"></p>
         </div>
         <div class="client-bar-controls">
           <label class="client-search">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
-            <input id="clientQuery" type="search" placeholder="Pesquisar por código ou nome" autocomplete="off" aria-label="Pesquisar cliente por código ou nome">
+            <input id="clientQuery" type="search" placeholder="Pesquisar por cÃ³digo ou nome" autocomplete="off" aria-label="Pesquisar cliente por cÃ³digo ou nome">
           </label>
           <label class="client-select-wrap">
             <span class="sr-only">Lista de clientes</span>
             <select id="clientSelect" aria-label="Lista de clientes"></select>
           </label>
         </div>
-        <div class="client-list" id="clientList" role="listbox" aria-label="Clientes filtrados"></div>
       </section>
 
       <header class="top">
         <div>
-          <h1>Cruzamento · mais vendidos × estoque do cliente</h1>
-          <p id="topSub">Importe o Mapão do cliente para ver o saldo ao lado do ranking Rocco.</p>
+          <h1>Cruzamento Â· mais vendidos Ã— estoque do cliente</h1>
+          <p id="topSub">Importe o MapÃ£o do cliente para ver o saldo ao lado do ranking Rocco.</p>
         </div>
         <label class="search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
-          <input id="q" type="search" placeholder="Buscar título, autor ou ISBN" autocomplete="off" disabled>
+          <input id="q" type="search" placeholder="Buscar tÃ­tulo, autor ou ISBN" autocomplete="off" disabled>
         </label>
       </header>
 
+      <section class="summary" id="summary" hidden>
+        <div class="summary-card">
+          <span>ISBNs consignados</span>
+          <strong id="sumIsbns">0</strong>
+        </div>
+        <div class="summary-card">
+          <span>Total saldo consignado (volume)</span>
+          <strong id="sumVolume">0</strong>
+        </div>
+        <div class="summary-card">
+          <span>Total saldo consignado (R$ lÃ­quido)</span>
+          <strong id="sumValue">R$ 0,00</strong>
+          <small>PreÃ§o Ã— saldo, com desconto da planilha</small>
+        </div>
+      </section>
+
       <section class="filters" id="filters" hidden>
         <button type="button" class="chip is-active" data-filter="all">Todos</button>
+        <button type="button" class="chip" data-filter="ranking">Top 500</button>
+        <button type="button" class="chip" data-filter="extra">Fora do ranking</button>
         <button type="button" class="chip" data-filter="com">Com estoque</button>
         <button type="button" class="chip" data-filter="sem">Sem estoque</button>
-        <button type="button" class="chip" data-filter="parado">Parados 90+ dias</button>
+        <button type="button" class="chip" data-filter="urgent">Repor com urgÃªncia</button>
+        <button type="button" class="chip" data-filter="alert">Alerta reposiÃ§Ã£o</button>
+        <button type="button" class="chip" data-filter="parado90">Parados 90+ dias</button>
+        <button type="button" class="chip" data-filter="parado180">Parados 180+ dias</button>
       </section>
 
       <section class="table-wrap" aria-live="polite">
         <div class="empty" id="emptyState">
-          <h2>Esboço pronto para o cruzamento</h2>
-          <p>A lista de mais vendidos já entra fixa. O vendedor só importa o CSV do Mapão e vê, na ordem do ranking, o saldo consignado e os dias sem giro (F dias).</p>
+          <h2 id="emptyTitle">EsboÃ§o pronto para o cruzamento</h2>
+          <p id="emptyText">A lista de mais vendidos jÃ¡ entra fixa. Importe o CSV do MapÃ£o e escolha o cliente para ver o saldo e os dias sem giro.</p>
         </div>
 
         <table class="grid" id="grid" hidden>
           <thead>
             <tr>
-              <th class="num">#</th>
-              <th>Título</th>
-              <th>ISBN</th>
-              <th class="num">Preço</th>
-              <th class="num">Saldo</th>
-              <th class="num">F dias</th>
-              <th class="num">Vendido</th>
-              <th>Situação</th>
+                            <th class="num sortable" data-sort="ranking" aria-sort="none"><button type="button">Ranking<br>Rocco</button></th>
+              <th class="sortable" data-sort="titulo" aria-sort="none"><button type="button">TÃ­tulo</button></th>
+              <th class="sortable" data-sort="isbn" aria-sort="none"><button type="button">ISBN</button></th>
+              <th class="num sortable" data-sort="preco" aria-sort="none"><button type="button">PreÃ§o</button></th>
+              <th class="num sortable" data-sort="saldo" aria-sort="none"><button type="button">Saldo</button></th>
+              <th class="num sortable" data-sort="fdias" aria-sort="none"><button type="button">Dias sem giro</button></th>
+              <th class="num sortable" data-sort="vendido" aria-sort="none"><button type="button">Vendido</button></th>
+              <th class="sortable" data-sort="situacao" aria-sort="none"><button type="button">SituaÃ§Ã£o</button></th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
