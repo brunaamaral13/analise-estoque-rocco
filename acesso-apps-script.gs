@@ -1,14 +1,6 @@
-/**
- * Cole este código em: planilha Google → Extensões → Apps Script
- * Depois publique como app da Web (executar como: você / acesso: qualquer pessoa).
- * Cole a URL gerada em ACCESS_LOG_URL no arquivo app.js
- *
- * Aba esperada: "Acessos" com colunas Data/hora | Vendedor
- */
-
 function ensureSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName("Acessos");
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("Acessos");
   if (!sheet) {
     sheet = ss.insertSheet("Acessos");
     sheet.appendRow(["Data/hora", "Vendedor"]);
@@ -18,32 +10,35 @@ function ensureSheet_() {
 }
 
 function doGet(e) {
-  const vendedor = ((e && e.parameter && e.parameter.vendedor) || "").toString().trim();
+  var vendedor = "";
+  if (e && e.parameter && e.parameter.vendedor) {
+    vendedor = String(e.parameter.vendedor).trim();
+  }
   if (vendedor) {
     ensureSheet_().appendRow([new Date(), vendedor]);
   }
   return ContentService
-    .createTextOutput(JSON.stringify({ ok: true }))
+    .createTextOutput('{"ok":true}')
     .setMimeType(ContentService.MimeType.JSON);
 }
 
 function doPost(e) {
-  let vendedor = "";
+  var vendedor = "";
   try {
     if (e && e.postData && e.postData.contents) {
-      const data = JSON.parse(e.postData.contents);
-      vendedor = (data.vendedor || "").toString().trim();
+      var data = JSON.parse(e.postData.contents);
+      if (data && data.vendedor) {
+        vendedor = String(data.vendedor).trim();
+      }
     }
-  } catch (err) {
-    // ignore parse errors
-  }
-  if (!vendedor && e && e.parameter) {
-    vendedor = (e.parameter.vendedor || "").toString().trim();
+  } catch (err) {}
+  if (!vendedor && e && e.parameter && e.parameter.vendedor) {
+    vendedor = String(e.parameter.vendedor).trim();
   }
   if (vendedor) {
     ensureSheet_().appendRow([new Date(), vendedor]);
   }
   return ContentService
-    .createTextOutput(JSON.stringify({ ok: true }))
+    .createTextOutput('{"ok":true}')
     .setMimeType(ContentService.MimeType.JSON);
 }
