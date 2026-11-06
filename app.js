@@ -4,8 +4,30 @@
   const IDLE_DAYS_LONG = 180;
   const TOP_SALDO_RANK = 150;
   const TARGET_OK_SALDO = 8;
+  const SELLER_STORAGE_KEY = "rocco_estoque_vendedor";
+
+  // Cole aqui a URL do Apps Script (planilha de acessos). Enquanto estiver vazio,
+  // a seleção do vendedor funciona, mas o registro na planilha ainda não envia.
+  const ACCESS_LOG_URL = "";
+
+  const SELLERS = [
+    "Salete",
+    "Rafaela",
+    "Gilsan",
+    "Geysa",
+    "Rossano",
+    "Michael",
+    "Silvia",
+    "Bruna",
+  ];
 
   const els = {
+    sellerGate: document.getElementById("sellerGate"),
+    sellerGateList: document.getElementById("sellerGateList"),
+    btnSellerContinue: document.getElementById("btnSellerContinue"),
+    appShell: document.getElementById("appShell"),
+    sellerNameLabel: document.getElementById("sellerNameLabel"),
+    btnChangeSeller: document.getElementById("btnChangeSeller"),
     rankMeta: document.getElementById("rankMeta"),
     mapaMeta: document.getElementById("mapaMeta"),
     btnImport: document.getElementById("btnImport"),
@@ -45,6 +67,8 @@
   };
 
   const state = {
+    seller: null,
+    sellerPick: null,
     ranking: [],
     mapaRows: [],
     stockByKey: new Map(),
@@ -58,6 +82,86 @@
     sortDir: "asc",
     mapaQuality: null,
   };
+
+  function logSellerAccess(vendedor) {
+    if (!ACCESS_LOG_URL || !vendedor) return;
+    const url = `${ACCESS_LOG_URL}${ACCESS_LOG_URL.includes("?") ? "&" : "?"}vendedor=${encodeURIComponent(vendedor)}`;
+    // no-cors: o Apps Script registra mesmo sem lermos a resposta
+    fetch(url, { method: "GET", mode: "no-cors", keepalive: true }).catch(() => {});
+  }
+
+  function renderSellerGateOptions() {
+    if (!els.sellerGateList) return;
+    els.sellerGateList.innerHTML = SELLERS.map((name) => `
+      <button type="button" class="seller-gate-option${state.sellerPick === name ? " is-selected" : ""}" data-seller="${escapeHtml(name)}" role="option" aria-selected="${state.sellerPick === name ? "true" : "false"}">
+        ${escapeHtml(name)}
+      </button>
+    `).join("");
+    if (els.btnSellerContinue) els.btnSellerContinue.disabled = !state.sellerPick;
+  }
+
+  function showSellerGate() {
+    state.sellerPick = state.seller && SELLERS.includes(state.seller) ? state.seller : null;
+    if (els.sellerGate) els.sellerGate.hidden = false;
+    if (els.appShell) els.appShell.hidden = true;
+    if (els.btnImport) els.btnImport.disabled = true;
+    renderSellerGateOptions();
+  }
+
+  function enterApp(vendedor, { log = true } = {}) {
+    if (!SELLERS.includes(vendedor)) return;
+    state.seller = vendedor;
+    state.sellerPick = vendedor;
+    try {
+      sessionStorage.setItem(SELLER_STORAGE_KEY, vendedor);
+    } catch (err) {
+      // ignore storage errors
+    }
+    if (els.sellerNameLabel) els.sellerNameLabel.textContent = vendedor;
+    if (els.sellerGate) els.sellerGate.hidden = true;
+    if (els.appShell) els.appShell.hidden = false;
+    if (els.btnImport) els.btnImport.disabled = false;
+    if (els.topSub && !state.selectedClient) {
+      els.topSub.textContent = `${vendedor} · importe o Mapão do cliente para ver o saldo ao lado do ranking Rocco.`;
+    }
+    if (log) logSellerAccess(vendedor);
+  }
+
+  function initSellerGate() {
+    let saved = "";
+    try {
+      saved = sessionStorage.getItem(SELLER_STORAGE_KEY) || "";
+    } catch (err) {
+      saved = "";
+    }
+
+    if (els.sellerGateList) {
+      els.sellerGateList.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-seller]");
+        if (!btn) return;
+        state.sellerPick = btn.dataset.seller;
+        renderSellerGateOptions();
+      });
+    }
+
+    if (els.btnSellerContinue) {
+      els.btnSellerContinue.addEventListener("click", () => {
+        if (!state.sellerPick) return;
+        enterApp(state.sellerPick, { log: true });
+      });
+    }
+
+    if (els.btnChangeSeller) {
+      els.btnChangeSeller.addEventListener("click", () => showSellerGate());
+    }
+
+    if (saved && SELLERS.includes(saved)) {
+      // Mesma aba/sessão: não regrava acesso
+      enterApp(saved, { log: false });
+    } else {
+      showSellerGate();
+    }
+  }
 
   function parseNumber(value) {
     if (value == null || value === "") return null;
@@ -757,6 +861,7 @@
       els.mainActiveFilters.hidden = false;
       const tone = filterTone(state.filter);
       els.mainActiveFilters.innerHTML = `
+        ${state.seller ? `<span class="filter-chip"><em>Vendedor</em> ${escapeHtml(state.seller)}</span>` : ""}
         <span class="filter-chip"><em>Cliente</em> ${escapeHtml(client.codigo)} · ${escapeHtml(client.nome)}</span>
         <span class="filter-chip"><em>Base</em> Mais vendidos</span>
         <span class="filter-chip ${tone}"><em>Filtro</em> ${escapeHtml(filterLabel)}</span>
@@ -994,8 +1099,19 @@
     render();
   }
 
-  els.btnImport.addEventListener("click", () => els.fileMapa.click());
+  els.btnImport.addEventListener("click", () => {
+    if (!state.seller) {
+      showSellerGate();
+      return;
+    }
+    els.fileMapa.click();
+  });
   els.fileMapa.addEventListener("change", async (e) => {
+    if (!state.seller) {
+      showSellerGate();
+      e.target.value = "";
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
     try {
@@ -1100,5 +1216,6 @@
     render();
   });
 
+  initSellerGate();
   loadRanking();
 })();

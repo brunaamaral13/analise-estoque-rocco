@@ -7,16 +7,32 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Outfit:wght@360;460;560;650&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260306g">
+  <link rel="stylesheet" href="styles.css?v=20260306h">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b5191a'/%3E%3C/svg%3E">
 </head>
 <body>
-  <div class="app">
+  <div class="seller-gate" id="sellerGate" role="dialog" aria-modal="true" aria-labelledby="sellerGateTitle">
+    <div class="seller-gate-card">
+      <p class="seller-gate-eyebrow">Rocco · Análise de estoque</p>
+      <h1 id="sellerGateTitle">Quem está usando?</h1>
+      <p class="seller-gate-text">Selecione seu nome para continuar. Depois disso você poderá importar o CSV do Mapão.</p>
+      <div class="seller-gate-list" id="sellerGateList" role="listbox" aria-label="Lista de vendedores"></div>
+      <button type="button" class="seller-gate-btn" id="btnSellerContinue" disabled>Continuar</button>
+    </div>
+  </div>
+
+  <div class="app" id="appShell" hidden>
     <aside class="sidebar">
       <div class="brand">
         <img src="logo-rocco.png" alt="Editora Rocco" width="184" height="50">
         <small>Análise de estoque</small>
       </div>
+
+      <section class="panel panel-seller">
+        <p class="panel-label">Vendedor</p>
+        <p class="panel-title" id="sellerNameLabel">—</p>
+        <button type="button" class="side-clear-filters" id="btnChangeSeller">Trocar vendedor</button>
+      </section>
 
       <section class="panel">
         <p class="panel-label">Base Rocco</p>
@@ -37,7 +53,7 @@
         <p class="panel-label">Cliente</p>
         <p class="panel-title">Importar Mapão</p>
         <p class="panel-meta" id="mapaMeta">Nenhum arquivo importado</p>
-        <button type="button" class="btn-import" id="btnImport">
+        <button type="button" class="btn-import" id="btnImport" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10"/><path d="m8 8 4-4 4 4"/><path d="M5 20h14"/></svg>
           Importar CSV do Mapão
         </button>
@@ -185,7 +201,7 @@
       <section class="table-wrap" aria-live="polite">
         <div class="empty" id="emptyState">
           <h2 id="emptyTitle">Esboço pronto para o cruzamento</h2>
-          <p id="emptyText">A lista de mais vendidos já entra fixa. Importe o CSV do Mapão e escolha o cliente para ver o saldo e os dias sem giro.</p>
+          <p id="emptyText">Com o vendedor identificado, importe o CSV do Mapão e escolha o cliente para ver o saldo e os dias sem giro.</p>
         </div>
 
         <table class="grid" id="grid" hidden>
@@ -207,6 +223,6 @@
     </main>
   </div>
 
-  <script src="app.js?v=20260306g"></script>
+  <script src="app.js?v=20260306h"></script>
 </body>
 </html>
