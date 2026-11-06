@@ -10,14 +10,14 @@
   const ACCESS_LOG_URL = "https://script.google.com/macros/s/AKfycbwN9jd81SoPOJ5LuhA-e3PHld7Ql_On7hU2fG2LwZa6BKoODqHhMP6XmKHeeSbuzMeg/exec";
 
   const SELLERS = [
-    "Salete",
-    "Rafaela",
-    "Gilsan",
-    "Geysa",
-    "Rossano",
-    "Michael",
-    "Silvia",
     "Bruna",
+    "Geysa",
+    "Gilsan",
+    "Michael",
+    "Rafaela",
+    "Rossano",
+    "Salete",
+    "Silvia",
   ];
 
   const els = {
