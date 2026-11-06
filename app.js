@@ -30,6 +30,8 @@
     rankMeta: document.getElementById("rankMeta"),
     mapaMeta: document.getElementById("mapaMeta"),
     btnImport: document.getElementById("btnImport"),
+    btnImportMain: document.getElementById("btnImportMain"),
+    emptyHint: document.getElementById("emptyHint"),
     fileMapa: document.getElementById("fileMapa"),
     clientBar: document.getElementById("clientBar"),
     clientSelect: document.getElementById("clientSelect"),
@@ -104,6 +106,7 @@
     if (els.sellerGate) els.sellerGate.hidden = false;
     if (els.appShell) els.appShell.hidden = true;
     if (els.btnImport) els.btnImport.disabled = true;
+    if (els.btnImportMain) els.btnImportMain.disabled = true;
     renderSellerGateOptions();
   }
 
@@ -120,6 +123,7 @@
     if (els.sellerGate) els.sellerGate.hidden = true;
     if (els.appShell) els.appShell.hidden = false;
     if (els.btnImport) els.btnImport.disabled = false;
+    if (els.btnImportMain) els.btnImportMain.disabled = false;
     if (els.topSub && !state.selectedClient) {
       els.topSub.textContent = `${vendedor} · importe o Mapão do cliente para ver o saldo ao lado do ranking Rocco.`;
     }
@@ -974,15 +978,31 @@
   function updateEmptyState() {
     if (state.selectedClient) return;
 
-    if (state.clients.length) {
+    const hasMapa = state.clients.length > 0;
+    if (els.btnImportMain) els.btnImportMain.hidden = hasMapa;
+    if (els.emptyHint) els.emptyHint.hidden = hasMapa;
+
+    if (hasMapa) {
       els.emptyTitle.textContent = "Escolha um cliente";
       els.emptyText.textContent = `Mapão importado com ${state.clients.length.toLocaleString("pt-BR")} cliente(s). Use a busca ou a lista acima para selecionar e carregar o cruzamento.`;
-      els.topSub.textContent = "Selecione um cliente para analisar o estoque.";
+      els.topSub.textContent = state.seller
+        ? `${state.seller} · selecione um cliente para analisar o estoque.`
+        : "Selecione um cliente para analisar o estoque.";
     } else {
-      els.emptyTitle.textContent = "Esboço pronto para o cruzamento";
-      els.emptyText.textContent = "A lista de mais vendidos já entra fixa. Importe o CSV do Mapão e escolha o cliente para ver o saldo e os dias sem giro.";
-      els.topSub.textContent = "Importe o Mapão do cliente para ver o saldo ao lado do ranking Rocco.";
+      els.emptyTitle.textContent = "Pronto para o cruzamento";
+      els.emptyText.textContent = "Importe o CSV do Mapão para cruzar o estoque do cliente com os mais vendidos Rocco.";
+      els.topSub.textContent = state.seller
+        ? `${state.seller} · importe o Mapão do cliente para ver o saldo ao lado do ranking Rocco.`
+        : "Importe o Mapão do cliente para ver o saldo ao lado do ranking Rocco.";
     }
+  }
+
+  function openMapaPicker() {
+    if (!state.seller) {
+      showSellerGate();
+      return;
+    }
+    els.fileMapa.click();
   }
 
   function render() {
@@ -1098,13 +1118,10 @@
     render();
   }
 
-  els.btnImport.addEventListener("click", () => {
-    if (!state.seller) {
-      showSellerGate();
-      return;
-    }
-    els.fileMapa.click();
-  });
+  els.btnImport.addEventListener("click", () => openMapaPicker());
+  if (els.btnImportMain) {
+    els.btnImportMain.addEventListener("click", () => openMapaPicker());
+  }
   els.fileMapa.addEventListener("change", async (e) => {
     if (!state.seller) {
       showSellerGate();
