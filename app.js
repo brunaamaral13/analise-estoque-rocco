@@ -35,7 +35,8 @@
   const state = {
     ranking: [],
     mapaRows: [],
-    stockByIsbn: new Map(),
+    stockByKey: new Map(),
+    stockLookup: new Map(),
     clients: [],
     selectedClient: null,
     clientQuery: "",
@@ -43,19 +44,97 @@
     query: "",
     sortKey: "ranking",
     sortDir: "asc",
+    mapaQuality: null,
   };
-
-  function normalizeIsbn(value) {
-    return String(value || "")
-      .replace(/[^0-9Xx]/g, "")
-      .toUpperCase();
-  }
 
   function parseNumber(value) {
     if (value == null || value === "") return null;
-    const cleaned = String(value).trim().replace(/\./g, "").replace(",", ".");
+    let cleaned = String(value).trim();
+    if (/[eE][+-]?\d+/.test(cleaned)) {
+      cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+    } else {
+      cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+    }
     const n = Number(cleaned);
     return Number.isFinite(n) ? n : null;
+  }
+
+  function expandIsbnCandidate(value) {
+    if (value == null || value === "") return "";
+    let raw = String(value).trim();
+    if (/[eE][+-]?\d+/.test(raw)) {
+      const n = Number(raw.replace(/\./g, "").replace(",", "."));
+      if (!Number.isFinite(n) || n <= 0) return "";
+      raw = String(Math.round(n));
+    }
+    return raw.replace(/[^0-9Xx]/g, "").toUpperCase();
+  }
+
+  function isbn10To13(isbn10) {
+    const core = String(isbn10 || "").toUpperCase();
+    if (!/^\d{9}[\dX]$/.test(core)) return "";
+    const body = `978${core.slice(0, 9)}`;
+    let sum = 0;
+    for (let i = 0; i < 12; i += 1) {
+      sum += Number(body[i]) * (i % 2 === 0 ? 1 : 3);
+    }
+    const check = (10 - (sum % 10)) % 10;
+    return `${body}${check}`;
+  }
+
+  function isbn13To10(isbn13) {
+    const core = String(isbn13 || "");
+    if (!/^978\d{10}$/.test(core)) return "";
+    const body = core.slice(3, 12);
+    let sum = 0;
+    for (let i = 0; i < 9; i += 1) sum += Number(body[i]) * (10 - i);
+    const checkNum = (11 - (sum % 11)) % 11;
+    const check = checkNum === 10 ? "X" : String(checkNum);
+    return `${body}${check}`;
+  }
+
+  function isReliableIsbn(isbn) {
+    if (!isbn) return false;
+    if (!/^\d{9}[\dX]$|^\d{13}$/.test(isbn)) return false;
+    // Excel costuma truncar ISBN-13 em notação científica (muitos zeros no fim).
+    if (isbn.length === 13 && /0{5,}$/.test(isbn)) return false;
+    return true;
+  }
+
+  function normalizeIsbn(value) {
+    const isbn = expandIsbnCandidate(value);
+    if (!isbn) return "";
+    if (isbn.length === 10) return isbn10To13(isbn) || isbn;
+    if (isbn.length === 13) return isbn;
+    return isbn;
+  }
+
+  function isbnAliases(value) {
+    const aliases = new Set();
+    const raw = expandIsbnCandidate(value);
+    const normalized = normalizeIsbn(value);
+    [raw, normalized].forEach((v) => {
+      if (v) aliases.add(v);
+    });
+    if (normalized && normalized.length === 13) {
+      const as10 = isbn13To10(normalized);
+      if (as10) aliases.add(as10);
+    }
+    if (raw && raw.length === 10) {
+      const as13 = isbn10To13(raw);
+      if (as13) aliases.add(as13);
+    }
+    return [...aliases].filter(isReliableIsbn);
+  }
+
+  function normalizeTitle(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .replace(/\s+/g, " ");
   }
 
   function parseIntSafe(value) {
@@ -162,7 +241,9 @@
       state.ranking = rows
         .map((r) => ({
           isbn: normalizeIsbn(r.isbn),
+          aliases: isbnAliases(r.isbn),
           titulo: r.titulo || "",
+          titleKey: normalizeTitle(r.titulo || ""),
           autor: r.autor || "",
           ranking: parseIntSafe(r.ranking),
         }))
@@ -178,21 +259,45 @@
   }
 
   function buildClientStock(rows, clientCode) {
-    const map = new Map();
+    const byKey = new Map();
+    const lookup = new Map();
+    let totalRows = 0;
+    let badIsbnRows = 0;
+
+    function registerAlias(alias, key) {
+      if (!alias || lookup.has(alias)) return;
+      lookup.set(alias, key);
+    }
+
     rows
       .filter((r) => String(r.codigo) === String(clientCode))
       .forEach((r) => {
-        const isbn = normalizeIsbn(r.isbn || r.codbarra);
-        if (!isbn) return;
+        totalRows += 1;
+        const aliases = [
+          ...isbnAliases(r.isbn),
+          ...isbnAliases(r.codbarra),
+        ];
+        const reliable = aliases.find(isReliableIsbn) || "";
+        if (!reliable) badIsbnRows += 1;
 
-        const prev = map.get(isbn) || {
-          isbn,
+        const titleKey = normalizeTitle(r.titulo || "");
+        const codLivro = String(r.codlivro || "").trim();
+        const key = reliable
+          || (codLivro ? `COD:${codLivro}` : "")
+          || (titleKey ? `TIT:${titleKey}` : "")
+          || `ROW:${totalRows}`;
+
+        const prev = byKey.get(key) || {
+          key,
+          isbn: reliable || "",
           titulo: r.titulo || "",
+          titleKey,
           preco: parseNumber(r.preco),
           consignado: 0,
           valorLiquido: 0,
           fdias: null,
           vendido: 0,
+          matchedRanking: false,
         };
 
         const qty = parseIntSafe(r.consignado) || 0;
@@ -212,10 +317,33 @@
         }
         if (prev.preco == null) prev.preco = preco;
         if (!prev.titulo) prev.titulo = r.titulo || "";
+        if (!prev.isbn && reliable) prev.isbn = reliable;
 
-        map.set(isbn, prev);
+        byKey.set(key, prev);
+        aliases.forEach((alias) => registerAlias(alias, key));
+        if (titleKey) registerAlias(`T:${titleKey}`, key);
+        if (codLivro) registerAlias(`COD:${codLivro}`, key);
       });
-    return map;
+
+    return {
+      byKey,
+      lookup,
+      totalRows,
+      badIsbnRows,
+      uniqueTitles: byKey.size,
+    };
+  }
+
+  function findStockForRanking(item) {
+    for (const alias of item.aliases || isbnAliases(item.isbn)) {
+      const key = state.stockLookup.get(alias);
+      if (key && state.stockByKey.has(key)) return state.stockByKey.get(key);
+    }
+    if (item.titleKey) {
+      const key = state.stockLookup.get(`T:${item.titleKey}`);
+      if (key && state.stockByKey.has(key)) return state.stockByKey.get(key);
+    }
+    return null;
   }
 
   function listClients(rows) {
@@ -271,15 +399,15 @@
     return { key: "ok", label: "Com estoque", className: "badge-ok" };
   }
 
-  function rankingIsbnSet() {
-    return new Set(state.ranking.map((item) => item.isbn));
-  }
-
   function buildAllRows() {
-    const rankedIsbns = rankingIsbnSet();
+    const matchedKeys = new Set();
 
     const ranked = state.ranking.map((item) => {
-      const stock = state.stockByIsbn.get(item.isbn) || null;
+      const stock = findStockForRanking(item);
+      if (stock) {
+        stock.matchedRanking = true;
+        matchedKeys.add(stock.key);
+      }
       return {
         isbn: item.isbn,
         titulo: item.titulo,
@@ -291,10 +419,10 @@
       };
     });
 
-    const extras = [...state.stockByIsbn.values()]
-      .filter((stock) => !rankedIsbns.has(stock.isbn))
+    const extras = [...state.stockByKey.values()]
+      .filter((stock) => !matchedKeys.has(stock.key))
       .map((stock) => ({
-        isbn: stock.isbn,
+        isbn: stock.isbn || "—",
         titulo: stock.titulo || "Sem título",
         autor: "",
         ranking: null,
@@ -398,22 +526,23 @@
     let zero = 0;
     let idle90 = 0;
     let idle180 = 0;
-    const rankedIsbns = rankingIsbnSet();
+    const matchedKeys = new Set();
 
     state.ranking.forEach((item) => {
-      const stock = state.stockByIsbn.get(item.isbn);
+      const stock = findStockForRanking(item);
       if (!stock) {
         zero += 1;
         return;
       }
       match += 1;
+      matchedKeys.add(stock.key);
       if ((stock.consignado || 0) <= 0) zero += 1;
       if ((stock.fdias || 0) >= IDLE_DAYS) idle90 += 1;
       if ((stock.fdias || 0) >= IDLE_DAYS_LONG) idle180 += 1;
     });
 
-    state.stockByIsbn.forEach((stock, isbn) => {
-      if (rankedIsbns.has(isbn)) return;
+    state.stockByKey.forEach((stock) => {
+      if (matchedKeys.has(stock.key)) return;
       if ((stock.consignado || 0) <= 0) zero += 1;
       if ((stock.fdias || 0) >= IDLE_DAYS) idle90 += 1;
       if ((stock.fdias || 0) >= IDLE_DAYS_LONG) idle180 += 1;
@@ -545,18 +674,29 @@
       : null;
     state.selectedClient = client || null;
     if (!client) {
-      state.stockByIsbn = new Map();
+      state.stockByKey = new Map();
+      state.stockLookup = new Map();
+      state.mapaQuality = null;
       els.clientMeta.textContent = "";
       render();
       return;
     }
 
-    state.stockByIsbn = buildClientStock(state.mapaRows, client.codigo);
+    const built = buildClientStock(state.mapaRows, client.codigo);
+    state.stockByKey = built.byKey;
+    state.stockLookup = built.lookup;
+    state.mapaQuality = built;
     const place = [client.cidade, client.estado].filter(Boolean).join("/");
     els.clientMeta.textContent = place
       ? `Código ${client.codigo} · ${place}`
       : `Código ${client.codigo}`;
     els.topSub.textContent = `${client.nome} · ranking Rocco com saldo do Mapão`;
+
+    if (built.badIsbnRows > 0) {
+      const pct = Math.round((built.badIsbnRows / Math.max(built.totalRows, 1)) * 100);
+      els.mapaMeta.textContent = `${els.mapaMeta.textContent.split(" · aviso:")[0]} · aviso: ${built.badIsbnRows.toLocaleString("pt-BR")} linhas (${pct}%) com ISBN inválido no Excel; cruzamento usa título/código do livro quando possível`;
+    }
+
     render();
   }
 
@@ -569,7 +709,9 @@
     state.clients = listClients(rows);
     state.clientQuery = "";
     state.selectedClient = null;
-    state.stockByIsbn = new Map();
+    state.stockByKey = new Map();
+    state.stockLookup = new Map();
+    state.mapaQuality = null;
     els.clientQuery.value = "";
     els.clientMeta.textContent = "";
     els.mapaMeta.textContent = `${file.name} · ${rows.length.toLocaleString("pt-BR")} linhas · ${state.clients.length} cliente(s)`;
