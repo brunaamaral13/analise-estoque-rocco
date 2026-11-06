@@ -869,7 +869,7 @@
         <span class="filter-chip"><em>Base</em> Mais vendidos</span>
         <span class="filter-chip ${tone}"><em>Filtro</em> ${escapeHtml(filterLabel)}</span>
         ${search ? `<span class="filter-chip"><em>Busca</em> ${escapeHtml(search)}</span>` : ""}
-        ${hasTableFilter ? `<button type="button" class="clear-filters-main" id="btnClearFiltersMain">Limpar filtros</button>` : ""}
+        <button type="button" class="clear-filters-main" id="btnClearFiltersMain"${hasTableFilter ? "" : " disabled"}>Limpar filtros</button>
       `;
     }
   }

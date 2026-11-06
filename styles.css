@@ -263,9 +263,13 @@ h1, h2, p { margin: 0; }
   cursor: pointer;
   box-shadow: var(--shadow);
 }
-.active-filters-bar .clear-filters-main:hover {
+.active-filters-bar .clear-filters-main:hover:not(:disabled) {
   background: var(--red);
   color: #fff;
+}
+.active-filters-bar .clear-filters-main:disabled {
+  opacity: .45;
+  cursor: default;
 }
 .btn-import {
   margin-top: 12px;
