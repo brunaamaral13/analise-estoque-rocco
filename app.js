@@ -424,6 +424,13 @@
       if (saldo <= 7) return { key: "alert", label: "Alerta<br>reposição", className: "badge-alert" };
     }
 
+    if ((stock.fdias || 0) >= IDLE_DAYS_LONG) {
+      return {
+        key: "idle180",
+        label: "Pedir<br>devolução",
+        className: "badge-return",
+      };
+    }
     if ((stock.fdias || 0) >= IDLE_DAYS) {
       return {
         key: "idle",
@@ -529,7 +536,7 @@
         if (state.filter === "extra" && row.inRanking) return false;
         if (
           state.filter === "com"
-          && !["ok", "idle", "alert", "urgent"].includes(row.sit.key)
+          && !["ok", "idle", "idle180", "alert", "urgent"].includes(row.sit.key)
         ) return false;
         if (
           state.filter === "sem"
@@ -677,12 +684,14 @@
     const icoUrgent = `<svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v6M12 16.2v.8"/></svg>`;
     const icoAlert = `<svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8 21 19.2H3L12 3.8Z"/><path d="M12 9.4v5M12 16.6v.8"/></svg>`;
     const icoIdle = `<svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 7.2A6.2 6.2 0 0 1 18 10"/><path d="M16.8 7.5 18 10l-2.5.4"/><path d="M16.8 16.8A6.2 6.2 0 0 1 6 14"/><path d="M7.2 16.5 6 14l2.5-.4"/></svg>`;
+    const icoReturn = `<svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>`;
 
     els.sumRoteiro.innerHTML = `
       <span class="roteiro-actions">
         <button type="button" class="is-urgent" data-filter="urgent">${icoUrgent}${urgent.toLocaleString("pt-BR")} repor urgente</button>
         <button type="button" class="is-alert" data-filter="alert">${icoAlert}${alert.toLocaleString("pt-BR")} alerta</button>
         <button type="button" class="is-idle" data-filter="parado90">${icoIdle}${acerto.toLocaleString("pt-BR")} puxar acerto/pedir devolução (90+)</button>
+        <button type="button" class="is-return" data-filter="parado180">${icoReturn}${idle180Count.toLocaleString("pt-BR")} pedir devolução (180+)</button>
       </span>
     `;
     syncFilterActiveState();
@@ -702,7 +711,7 @@
     urgent: "Repor com urgência",
     alert: "Alerta reposição",
     parado90: "Puxar acerto/pedir devolução (90+ dias)",
-    parado180: "Parados 180+ dias",
+    parado180: "Pedir devolução (180+ dias)",
   };
 
   function filterTone(filterKey) {

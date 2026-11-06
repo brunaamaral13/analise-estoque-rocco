@@ -522,6 +522,11 @@ h1, h2, p { margin: 0; }
   border-color: #c5d2e8;
   color: #2f4a73;
 }
+.roteiro-actions .is-return {
+  background: #efe8f4;
+  border-color: #d5c6e4;
+  color: #5a3d73;
+}
 .roteiro-actions button.is-active {
   font-weight: 650;
   box-shadow: 0 4px 14px rgba(28, 34, 48, 0.18);
@@ -539,6 +544,10 @@ h1, h2, p { margin: 0; }
 .roteiro-actions .is-idle.is-active {
   background: #2f4a73;
   border-color: #223656;
+}
+.roteiro-actions .is-return.is-active {
+  background: #5a3d73;
+  border-color: #432d57;
 }
 
 .filters {
@@ -727,6 +736,7 @@ h1, h2, p { margin: 0; }
 .badge-urgent { background: #fdecee; color: var(--down); }
 .badge-alert { background: #fff4d6; color: #7a5608; }
 .badge-idle { background: #e8eef8; color: #2f4a73; }
+.badge-return { background: #efe8f4; color: #5a3d73; }
 .badge-miss { background: #eef0f5; color: var(--muted); }
 
 .row-zero td { background: rgba(157, 44, 60, 0.03); }
