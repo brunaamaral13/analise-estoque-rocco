@@ -371,6 +371,112 @@ h1, h2, p { margin: 0; }
   gap: 10px;
   align-items: start;
 }
+.client-bar-secondary {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.isbn-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 560;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.isbn-toggle:hover {
+  color: var(--red-deep);
+}
+.isbn-search-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.isbn-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f7f8fc;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 12px;
+  min-width: min(320px, 100%);
+  max-width: 420px;
+}
+.isbn-search svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.8;
+  flex: 0 0 auto;
+}
+.isbn-search input {
+  border: 0;
+  outline: 0;
+  width: 100%;
+  background: transparent;
+  font-size: 13px;
+}
+.isbn-clear {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.isbn-clear:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.isbn-results {
+  margin-bottom: 18px;
+}
+.isbn-results-head {
+  margin-bottom: 12px;
+}
+.isbn-results-label {
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 560;
+  margin-bottom: 4px;
+}
+.isbn-results-head h2 {
+  font-family: var(--serif);
+  font-size: clamp(1.2rem, 2vw, 1.55rem);
+  letter-spacing: -.02em;
+}
+.isbn-results-meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.isbn-summary {
+  margin-bottom: 12px;
+}
+.isbn-table-wrap {
+  min-height: 0;
+}
+.isbn-table-wrap .grid tbody tr {
+  cursor: pointer;
+}
+.isbn-table-wrap .grid tbody tr:hover {
+  background: #f7f8fc;
+}
+.isbn-results-hint {
+  padding: 12px 16px 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
 .client-search-wrap {
   position: relative;
   min-width: 0;

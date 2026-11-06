@@ -38,6 +38,17 @@
     clientQuery: document.getElementById("clientQuery"),
     clientResults: document.getElementById("clientResults"),
     clientMeta: document.getElementById("clientMeta"),
+    btnToggleIsbnSearch: document.getElementById("btnToggleIsbnSearch"),
+    isbnSearchPanel: document.getElementById("isbnSearchPanel"),
+    isbnQuery: document.getElementById("isbnQuery"),
+    btnClearIsbn: document.getElementById("btnClearIsbn"),
+    isbnResults: document.getElementById("isbnResults"),
+    isbnResultTitle: document.getElementById("isbnResultTitle"),
+    isbnResultMeta: document.getElementById("isbnResultMeta"),
+    isbnSumClients: document.getElementById("isbnSumClients"),
+    isbnSumVolume: document.getElementById("isbnSumVolume"),
+    isbnSumValue: document.getElementById("isbnSumValue"),
+    isbnTbody: document.getElementById("isbnTbody"),
     sideKpis: document.getElementById("sideKpis"),
     kpiMatch: document.getElementById("kpiMatch"),
     kpiZero: document.getElementById("kpiZero"),
@@ -77,6 +88,9 @@
     clients: [],
     selectedClient: null,
     clientQuery: "",
+    isbnSearchOpen: false,
+    isbnQuery: "",
+    isbnResult: null,
     filter: "all",
     query: "",
     sortKey: "ranking",
@@ -486,6 +500,170 @@
       }
     });
     return [...byCode.values()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }
+
+  function rowMatchesIsbn(row, aliasSet, queryDigits) {
+    const aliases = [
+      ...isbnAliases(row.isbn),
+      ...isbnAliases(row.codbarra),
+    ];
+    if (aliases.some((alias) => aliasSet.has(alias))) return true;
+    if (queryDigits.length >= 10) {
+      const blob = `${expandIsbnCandidate(row.isbn)}${expandIsbnCandidate(row.codbarra)}`;
+      if (blob.includes(queryDigits)) return true;
+    }
+    return false;
+  }
+
+  function findClientsByIsbn(rawQuery) {
+    const q = String(rawQuery || "").trim();
+    if (!q || !state.mapaRows.length) return null;
+
+    const aliasSet = new Set(isbnAliases(q));
+    const normalized = normalizeIsbn(q);
+    if (normalized) aliasSet.add(normalized);
+    const queryDigits = q.replace(/\D/g, "");
+
+    if (!aliasSet.size && queryDigits.length < 10) return { query: q, titulo: "", isbn: "", clients: [] };
+
+    const byClient = new Map();
+    let titulo = "";
+    let isbn = normalized || queryDigits;
+
+    state.mapaRows.forEach((r) => {
+      if (!rowMatchesIsbn(r, aliasSet, queryDigits)) return;
+
+      const code = String(r.codigo || "").trim();
+      if (!code) return;
+
+      const qty = parseIntSafe(r.consignado) || 0;
+      const preco = parseNumber(r.preco);
+      const desconto = parseNumber(r.perdesconto) || 0;
+      const fator = Math.max(0, 1 - desconto / 100);
+      const valor = preco != null && qty ? preco * qty * fator : 0;
+      const fdias = parseIntSafe(r.fdias);
+      const vendido = parseIntSafe(r.vendido) || 0;
+
+      if (!titulo && r.titulo) titulo = r.titulo;
+      const reliable = [...isbnAliases(r.isbn), ...isbnAliases(r.codbarra)].find(isReliableIsbn);
+      if (reliable) isbn = reliable;
+
+      const prev = byClient.get(code) || {
+        codigo: code,
+        nome: r.nome || "Cliente sem nome",
+        cidade: r.cidade || "",
+        estado: r.estado || "",
+        consignado: 0,
+        valorLiquido: 0,
+        fdias: null,
+        vendido: 0,
+      };
+
+      prev.consignado += qty;
+      prev.valorLiquido += valor;
+      prev.vendido += vendido;
+      if (fdias != null) prev.fdias = prev.fdias == null ? fdias : Math.max(prev.fdias, fdias);
+      if (!prev.nome && r.nome) prev.nome = r.nome;
+      byClient.set(code, prev);
+    });
+
+    if (!titulo) {
+      const ranked = state.ranking.find((item) => (item.aliases || []).some((a) => aliasSet.has(a)));
+      if (ranked) {
+        titulo = ranked.titulo;
+        if (ranked.isbn) isbn = ranked.isbn;
+      }
+    }
+
+    const clients = [...byClient.values()]
+      .filter((c) => (c.consignado || 0) > 0)
+      .sort((a, b) => (b.consignado || 0) - (a.consignado || 0));
+
+    return { query: q, titulo, isbn, clients };
+  }
+
+  function clearIsbnSearch() {
+    state.isbnQuery = "";
+    state.isbnResult = null;
+    if (els.isbnQuery) els.isbnQuery.value = "";
+    if (els.btnClearIsbn) els.btnClearIsbn.hidden = true;
+  }
+
+  function runIsbnSearch(rawQuery) {
+    state.isbnQuery = String(rawQuery || "").trim();
+    if (els.btnClearIsbn) els.btnClearIsbn.hidden = !state.isbnQuery;
+
+    if (!state.isbnQuery) {
+      state.isbnResult = null;
+      render();
+      return;
+    }
+
+    // Busca por ISBN é secundária: sai da análise de cliente atual.
+    if (state.selectedClient) {
+      state.selectedClient = null;
+      state.stockByKey = new Map();
+      state.stockLookup = new Map();
+      state.mapaQuality = null;
+      if (els.clientMeta) els.clientMeta.textContent = "";
+      if (els.clientSelect) els.clientSelect.value = "";
+      if (els.clientQuery) {
+        state.clientQuery = "";
+        els.clientQuery.value = "";
+      }
+    }
+
+    state.isbnResult = findClientsByIsbn(state.isbnQuery);
+    render();
+  }
+
+  function renderIsbnResults() {
+    if (!els.isbnResults) return;
+    const result = state.isbnResult;
+    const show = Boolean(result && state.isbnQuery && !state.selectedClient);
+    els.isbnResults.hidden = !show;
+    if (!show) return;
+
+    const clients = result.clients || [];
+    const volume = clients.reduce((acc, c) => acc + (c.consignado || 0), 0);
+    const valor = clients.reduce((acc, c) => acc + (c.valorLiquido || 0), 0);
+    const title = result.titulo || "ISBN encontrado no Mapão";
+    const isbnLabel = result.isbn || state.isbnQuery;
+
+    if (els.isbnResultTitle) els.isbnResultTitle.textContent = title;
+    if (els.isbnResultMeta) {
+      els.isbnResultMeta.textContent = clients.length
+        ? `ISBN ${isbnLabel} · ${clients.length.toLocaleString("pt-BR")} cliente(s) com estoque`
+        : `ISBN ${isbnLabel} · nenhum cliente com saldo consignado`;
+    }
+    if (els.isbnSumClients) els.isbnSumClients.textContent = clients.length.toLocaleString("pt-BR");
+    if (els.isbnSumVolume) els.isbnSumVolume.textContent = volume.toLocaleString("pt-BR");
+    if (els.isbnSumValue) els.isbnSumValue.textContent = money(valor);
+
+    if (els.isbnTbody) {
+      if (!clients.length) {
+        els.isbnTbody.innerHTML = `
+          <tr>
+            <td colspan="7">Nenhum cliente com este ISBN em estoque no Mapão importado.</td>
+          </tr>
+        `;
+      } else {
+        els.isbnTbody.innerHTML = clients.map((c) => {
+          const uf = [c.cidade, c.estado].filter(Boolean).join("/") || "—";
+          return `
+            <tr data-code="${escapeHtml(c.codigo)}">
+              <td>${escapeHtml(c.codigo)}</td>
+              <td>${escapeHtml(c.nome)}</td>
+              <td>${escapeHtml(uf)}</td>
+              <td class="num">${(c.consignado || 0).toLocaleString("pt-BR")}</td>
+              <td class="num">${money(c.valorLiquido || 0)}</td>
+              <td class="num fdias">${c.fdias == null ? "—" : c.fdias.toLocaleString("pt-BR")}</td>
+              <td class="num">${(c.vendido || 0).toLocaleString("pt-BR")}</td>
+            </tr>
+          `;
+        }).join("");
+      }
+    }
   }
 
   function normalizeSearch(value) {
@@ -983,6 +1161,7 @@
 
   function updateEmptyState() {
     if (state.selectedClient) return;
+    if (state.isbnResult && state.isbnQuery) return;
 
     const hasMapa = state.clients.length > 0;
     if (els.btnImportMain) els.btnImportMain.hidden = hasMapa;
@@ -990,7 +1169,7 @@
 
     if (hasMapa) {
       els.emptyTitle.textContent = "Escolha um cliente";
-      els.emptyText.textContent = `Mapão importado com ${state.clients.length.toLocaleString("pt-BR")} cliente(s). Use a busca ou a lista acima para selecionar e carregar o cruzamento.`;
+      els.emptyText.textContent = `Mapão importado com ${state.clients.length.toLocaleString("pt-BR")} cliente(s). Use a busca ou a lista acima para selecionar e carregar o cruzamento. Também pode usar Buscar por ISBN.`;
       els.topSub.textContent = state.seller
         ? `${state.seller} · selecione um cliente para analisar o estoque.`
         : "Selecione um cliente para analisar o estoque.";
@@ -1013,7 +1192,15 @@
 
   function render() {
     const hasClient = Boolean(state.selectedClient);
-    if (els.emptyState) els.emptyState.hidden = hasClient;
+    const hasIsbnView = Boolean(state.isbnResult && state.isbnQuery && !hasClient);
+
+    if (els.isbnSearchPanel) els.isbnSearchPanel.hidden = !state.isbnSearchOpen;
+    if (els.btnToggleIsbnSearch) {
+      els.btnToggleIsbnSearch.hidden = state.clients.length === 0;
+      els.btnToggleIsbnSearch.textContent = state.isbnSearchOpen ? "Ocultar busca por ISBN" : "Buscar por ISBN";
+    }
+
+    if (els.emptyState) els.emptyState.hidden = hasClient || hasIsbnView;
     if (els.grid) els.grid.hidden = !hasClient;
     if (els.summary) els.summary.hidden = !hasClient;
     if (els.actions) els.actions.hidden = !hasClient;
@@ -1024,6 +1211,14 @@
     renderClientPicker();
     updateEmptyState();
     updateActiveFilters();
+    renderIsbnResults();
+
+    if (hasIsbnView && els.topSub) {
+      const n = state.isbnResult.clients.length;
+      els.topSub.textContent = state.seller
+        ? `${state.seller} · ISBN ${state.isbnResult.isbn || state.isbnQuery}: ${n.toLocaleString("pt-BR")} cliente(s) com estoque`
+        : `ISBN ${state.isbnResult.isbn || state.isbnQuery}: ${n.toLocaleString("pt-BR")} cliente(s) com estoque`;
+    }
 
     if (!hasClient) return;
 
@@ -1078,6 +1273,10 @@
       ? state.clients.find((c) => c.codigo === String(code))
       : null;
     state.selectedClient = client || null;
+    if (client) {
+      // Análise de cliente é o fluxo principal: fecha o resultado secundário de ISBN.
+      clearIsbnSearch();
+    }
     if (!client) {
       state.stockByKey = new Map();
       state.stockLookup = new Map();
@@ -1117,6 +1316,7 @@
     state.stockByKey = new Map();
     state.stockLookup = new Map();
     state.mapaQuality = null;
+    clearIsbnSearch();
     els.clientQuery.value = "";
     els.clientMeta.textContent = "";
     els.mapaMeta.textContent = `${file.name} · ${rows.length.toLocaleString("pt-BR")} linhas · ${state.clients.length} cliente(s)`;
@@ -1127,6 +1327,47 @@
   els.btnImport.addEventListener("click", () => openMapaPicker());
   if (els.btnImportMain) {
     els.btnImportMain.addEventListener("click", () => openMapaPicker());
+  }
+
+  if (els.btnToggleIsbnSearch) {
+    els.btnToggleIsbnSearch.addEventListener("click", () => {
+      if (!state.clients.length) return;
+      state.isbnSearchOpen = !state.isbnSearchOpen;
+      if (!state.isbnSearchOpen) clearIsbnSearch();
+      render();
+      if (state.isbnSearchOpen && els.isbnQuery) els.isbnQuery.focus();
+    });
+  }
+
+  if (els.isbnQuery) {
+    els.isbnQuery.addEventListener("input", (e) => {
+      runIsbnSearch(e.target.value);
+    });
+    els.isbnQuery.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        clearIsbnSearch();
+        state.isbnSearchOpen = false;
+        render();
+      }
+    });
+  }
+
+  if (els.btnClearIsbn) {
+    els.btnClearIsbn.addEventListener("click", () => {
+      clearIsbnSearch();
+      render();
+      if (els.isbnQuery) els.isbnQuery.focus();
+    });
+  }
+
+  if (els.isbnTbody) {
+    els.isbnTbody.addEventListener("click", (e) => {
+      const row = e.target.closest("tr[data-code]");
+      if (!row) return;
+      selectClient(row.dataset.code);
+      state.isbnSearchOpen = false;
+      render();
+    });
   }
   els.fileMapa.addEventListener("change", async (e) => {
     if (!state.seller) {

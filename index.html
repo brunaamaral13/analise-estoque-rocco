@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Outfit:wght@360;460;560;650&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260306k">
+  <link rel="stylesheet" href="styles.css?v=20260306n">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b5191a'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -99,6 +99,57 @@
             <span class="sr-only">Lista de clientes</span>
             <select id="clientSelect" aria-label="Lista de clientes"></select>
           </label>
+        </div>
+        <div class="client-bar-secondary">
+          <button type="button" class="isbn-toggle" id="btnToggleIsbnSearch">Buscar por ISBN</button>
+          <div class="isbn-search-panel" id="isbnSearchPanel" hidden>
+            <label class="isbn-search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+              <input id="isbnQuery" type="search" placeholder="Digite o ISBN" autocomplete="off" aria-label="Pesquisar clientes por ISBN">
+            </label>
+            <button type="button" class="isbn-clear" id="btnClearIsbn" hidden>Limpar busca ISBN</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="isbn-results" id="isbnResults" hidden>
+        <div class="isbn-results-head">
+          <div>
+            <p class="isbn-results-label">Resultado por ISBN</p>
+            <h2 id="isbnResultTitle">—</h2>
+            <p class="isbn-results-meta" id="isbnResultMeta"></p>
+          </div>
+        </div>
+        <div class="summary isbn-summary">
+          <div class="summary-card">
+            <span class="card-label">Clientes com estoque</span>
+            <strong id="isbnSumClients">0</strong>
+          </div>
+          <div class="summary-card">
+            <span class="card-label">Saldo total (volume)</span>
+            <strong id="isbnSumVolume">0</strong>
+          </div>
+          <div class="summary-card">
+            <span class="card-label">Valor total líquido</span>
+            <strong id="isbnSumValue">R$ 0,00</strong>
+          </div>
+        </div>
+        <div class="table-wrap isbn-table-wrap">
+          <table class="grid" id="isbnGrid">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Cliente</th>
+                <th>UF</th>
+                <th class="num">Saldo</th>
+                <th class="num">Valor líquido</th>
+                <th class="num">Dias sem giro</th>
+                <th class="num">Vendido</th>
+              </tr>
+            </thead>
+            <tbody id="isbnTbody"></tbody>
+          </table>
+          <p class="isbn-results-hint">Clique em um cliente para abrir a análise completa.</p>
         </div>
       </section>
 
@@ -228,6 +279,6 @@
     </main>
   </div>
 
-  <script src="app.js?v=20260306m"></script>
+  <script src="app.js?v=20260306n"></script>
 </body>
 </html>
