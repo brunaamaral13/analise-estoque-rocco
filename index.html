@@ -66,13 +66,14 @@
         <div class="client-bar-controls">
           <label class="client-search">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
-            <input id="clientQuery" type="search" placeholder="Pesquisar por código ou nome" autocomplete="off" aria-label="Pesquisar cliente por código ou nome">
+            <input id="clientQuery" type="search" placeholder="Digite o código ou nome do cliente" autocomplete="off" aria-label="Pesquisar cliente por código ou nome" aria-autocomplete="list" aria-controls="clientResults">
           </label>
           <label class="client-select-wrap">
             <span class="sr-only">Lista de clientes</span>
             <select id="clientSelect" aria-label="Lista de clientes"></select>
           </label>
         </div>
+        <div class="client-results" id="clientResults" hidden role="listbox" aria-label="Resultados da busca de clientes"></div>
       </section>
 
       <header class="top">
@@ -99,6 +100,29 @@
           <span>Total saldo consignado (R$ líquido)</span>
           <strong id="sumValue">R$ 0,00</strong>
           <small>Preço × saldo, com desconto da planilha</small>
+        </div>
+      </section>
+
+      <section class="actions" id="actions" hidden>
+        <div class="summary-card summary-card-wide summary-card-roteiro">
+          <span>Roteiro do dia</span>
+          <div class="roteiro-line" id="sumRoteiro">—</div>
+          <small>Comece por aqui neste cliente. Clique para filtrar.</small>
+        </div>
+        <div class="summary-card">
+          <span>Cobertura Top 150</span>
+          <strong id="sumCoverage">—</strong>
+          <small id="sumCoverageMeta">% com saldo e em ruptura</small>
+        </div>
+        <div class="summary-card">
+          <span>Valor parado 180+ dias</span>
+          <strong id="sumIdleValue">R$ 0,00</strong>
+          <small id="sumIdleMeta">Candidatos a devolução</small>
+        </div>
+        <div class="summary-card">
+          <span>Potencial de reposição</span>
+          <strong id="sumRestockValue">R$ 0,00</strong>
+          <small>Top 150 até saldo 8 (com desconto)</small>
         </div>
       </section>
 

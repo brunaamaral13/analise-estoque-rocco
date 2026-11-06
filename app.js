@@ -3,6 +3,7 @@
   const IDLE_DAYS = 90;
   const IDLE_DAYS_LONG = 180;
   const TOP_SALDO_RANK = 150;
+  const TARGET_OK_SALDO = 8;
 
   const els = {
     rankMeta: document.getElementById("rankMeta"),
@@ -12,6 +13,7 @@
     clientBar: document.getElementById("clientBar"),
     clientSelect: document.getElementById("clientSelect"),
     clientQuery: document.getElementById("clientQuery"),
+    clientResults: document.getElementById("clientResults"),
     clientMeta: document.getElementById("clientMeta"),
     sideKpis: document.getElementById("sideKpis"),
     kpiMatch: document.getElementById("kpiMatch"),
@@ -24,6 +26,13 @@
     sumIsbns: document.getElementById("sumIsbns"),
     sumVolume: document.getElementById("sumVolume"),
     sumValue: document.getElementById("sumValue"),
+    actions: document.getElementById("actions"),
+    sumRoteiro: document.getElementById("sumRoteiro"),
+    sumCoverage: document.getElementById("sumCoverage"),
+    sumCoverageMeta: document.getElementById("sumCoverageMeta"),
+    sumIdleValue: document.getElementById("sumIdleValue"),
+    sumIdleMeta: document.getElementById("sumIdleMeta"),
+    sumRestockValue: document.getElementById("sumRestockValue"),
     filters: document.getElementById("filters"),
     emptyState: document.getElementById("emptyState"),
     emptyTitle: document.getElementById("emptyTitle"),
@@ -363,13 +372,30 @@
     return [...byCode.values()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   }
 
+  function normalizeSearch(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
   function filteredClients() {
-    const q = state.clientQuery.trim().toLowerCase();
+    const q = normalizeSearch(state.clientQuery);
     if (!q) return state.clients;
     return state.clients.filter((c) => {
-      const blob = `${c.codigo} ${c.nome} ${c.cidade} ${c.estado}`.toLowerCase();
-      return blob.includes(q);
+      const blob = normalizeSearch(`${c.codigo} ${c.nome} ${c.cidade} ${c.estado}`);
+      return blob.includes(q) || normalizeSearch(c.codigo).startsWith(q);
     });
+  }
+
+  function pickBestClientMatch(list, query) {
+    const q = normalizeSearch(query);
+    if (!q || !list.length) return null;
+    const exactCode = list.find((c) => normalizeSearch(c.codigo) === q);
+    if (exactCode) return exactCode;
+    if (list.length === 1) return list[0];
+    return null;
   }
 
   function situation(stock, ranking) {
@@ -573,6 +599,120 @@
     els.sumValue.textContent = money(valor);
   }
 
+  function unitNetPrice(stock) {
+    if (!stock) return null;
+    if ((stock.consignado || 0) > 0 && (stock.valorLiquido || 0) > 0) {
+      return stock.valorLiquido / stock.consignado;
+    }
+    return stock.preco == null ? null : stock.preco;
+  }
+
+  function updateActionKpis() {
+    let urgent = 0;
+    let alert = 0;
+    let devolver = 0;
+    let top150 = 0;
+    let withStock = 0;
+    let rupture = 0;
+    let valorParado = 0;
+    let potencial = 0;
+
+    state.ranking.forEach((item) => {
+      if (item.ranking > TOP_SALDO_RANK) return;
+      top150 += 1;
+      const stock = findStockForRanking(item);
+      const saldo = stock ? (stock.consignado || 0) : 0;
+
+      if (!stock || saldo <= 0) {
+        rupture += 1;
+        urgent += 1;
+        const unit = unitNetPrice(stock);
+        if (unit != null) potencial += TARGET_OK_SALDO * unit;
+        return;
+      }
+
+      withStock += 1;
+      const unit = unitNetPrice(stock);
+
+      if (saldo <= 3) {
+        urgent += 1;
+        if (unit != null) potencial += Math.max(TARGET_OK_SALDO - saldo, 0) * unit;
+      } else if (saldo <= 7) {
+        alert += 1;
+        if (unit != null) potencial += Math.max(TARGET_OK_SALDO - saldo, 0) * unit;
+      }
+    });
+
+    state.stockByKey.forEach((stock) => {
+      if ((stock.consignado || 0) <= 0) return;
+      if ((stock.fdias || 0) < IDLE_DAYS_LONG) return;
+      devolver += 1;
+      valorParado += stock.valorLiquido || 0;
+    });
+
+    const pctStock = top150 ? Math.round((withStock / top150) * 100) : 0;
+    const pctRupture = top150 ? Math.round((rupture / top150) * 100) : 0;
+
+    els.sumRoteiro.innerHTML = `
+      <span class="roteiro-actions">
+        <button type="button" class="is-urgent" data-filter="urgent">${urgent.toLocaleString("pt-BR")} repor urgente</button>
+        <button type="button" class="is-alert" data-filter="alert">${alert.toLocaleString("pt-BR")} alerta</button>
+        <button type="button" class="is-idle" data-filter="parado180">${devolver.toLocaleString("pt-BR")} pedir devolução (180+)</button>
+      </span>
+    `;
+    els.sumCoverage.textContent = `${pctStock}% com saldo`;
+    els.sumCoverageMeta.textContent = `${pctRupture}% em ruptura · ${withStock}/${top150} com estoque`;
+    els.sumIdleValue.textContent = money(valorParado);
+    els.sumIdleMeta.textContent = `${devolver.toLocaleString("pt-BR")} ISBN(s) candidatos a devolução`;
+    els.sumRestockValue.textContent = money(potencial);
+  }
+
+  function applyFilter(filterKey) {
+    state.filter = filterKey;
+    els.filters.querySelectorAll(".chip").forEach((chip) => {
+      chip.classList.toggle("is-active", chip.dataset.filter === filterKey);
+    });
+    render();
+  }
+
+  function renderClientResults(list) {
+    if (!els.clientResults) return;
+
+    const q = state.clientQuery.trim();
+    if (!q) {
+      els.clientResults.hidden = true;
+      els.clientResults.innerHTML = "";
+      return;
+    }
+
+    els.clientResults.hidden = false;
+    if (!list.length) {
+      els.clientResults.innerHTML = `<p class="client-results-empty">Nenhum cliente com esse código ou nome.</p>`;
+      return;
+    }
+
+    const shown = list.slice(0, 30);
+    const more = list.length > shown.length
+      ? `<p class="client-results-empty">Mostrando ${shown.length} de ${list.length}. Continue digitando para refinar.</p>`
+      : "";
+
+    els.clientResults.innerHTML = `
+      <div class="client-results-head">${list.length.toLocaleString("pt-BR")} cliente(s) encontrado(s) — clique para abrir</div>
+      ${shown.map((c) => {
+        const place = [c.cidade, c.estado].filter(Boolean).join("/");
+        const active = state.selectedClient?.codigo === c.codigo ? " is-active" : "";
+        return `
+          <button type="button" class="client-result${active}" data-code="${escapeHtml(c.codigo)}" role="option" aria-selected="${state.selectedClient?.codigo === c.codigo}">
+            <strong>${escapeHtml(c.codigo)}</strong>
+            <span>${escapeHtml(c.nome)}</span>
+            ${place ? `<small>${escapeHtml(place)}</small>` : ""}
+          </button>
+        `;
+      }).join("")}
+      ${more}
+    `;
+  }
+
   function renderClientPicker() {
     const hasClients = state.clients.length > 0;
     els.clientBar.hidden = !hasClients;
@@ -593,6 +733,7 @@
 
     els.clientSelect.innerHTML = `<option value=""${placeholderSelected}>Selecione um cliente</option>${options}`;
     els.clientSelect.value = selectedCode;
+    renderClientResults(list);
   }
 
   function updateEmptyState() {
@@ -614,6 +755,7 @@
     els.emptyState.hidden = hasClient;
     els.grid.hidden = !hasClient;
     els.summary.hidden = !hasClient;
+    els.actions.hidden = !hasClient;
     els.filters.hidden = !hasClient;
     els.sideKpis.hidden = !hasClient;
     els.q.disabled = !hasClient;
@@ -624,6 +766,7 @@
     if (!hasClient) return;
 
     updateKpis();
+    updateActionKpis();
     updateSortHeaders();
     const rows = rowsForRender();
     updateSummary(rows);
@@ -735,6 +878,30 @@
   els.clientQuery.addEventListener("input", (e) => {
     state.clientQuery = e.target.value;
     renderClientPicker();
+
+    const list = filteredClients();
+    const best = pickBestClientMatch(list, state.clientQuery);
+    if (
+      best
+      && best.codigo !== state.selectedClient?.codigo
+      && /^\d+$/.test(state.clientQuery.trim())
+      && normalizeSearch(best.codigo) === normalizeSearch(state.clientQuery)
+    ) {
+      selectClient(best.codigo);
+    }
+  });
+  els.clientQuery.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const list = filteredClients();
+    const best = pickBestClientMatch(list, state.clientQuery) || list[0];
+    if (!best) return;
+    selectClient(best.codigo);
+  });
+  els.clientResults.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-code]");
+    if (!btn) return;
+    selectClient(btn.dataset.code);
   });
 
   els.q.addEventListener("input", (e) => {
@@ -745,11 +912,13 @@
   els.filters.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-filter]");
     if (!btn) return;
-    state.filter = btn.dataset.filter;
-    els.filters.querySelectorAll(".chip").forEach((chip) => {
-      chip.classList.toggle("is-active", chip === btn);
-    });
-    render();
+    applyFilter(btn.dataset.filter);
+  });
+
+  els.actions.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-filter]");
+    if (!btn) return;
+    applyFilter(btn.dataset.filter);
   });
 
   els.grid.querySelector("thead").addEventListener("click", (e) => {
