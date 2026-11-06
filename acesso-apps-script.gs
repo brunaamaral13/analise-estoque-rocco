@@ -23,22 +23,5 @@ function doGet(e) {
 }
 
 function doPost(e) {
-  var vendedor = "";
-  try {
-    if (e && e.postData && e.postData.contents) {
-      var data = JSON.parse(e.postData.contents);
-      if (data && data.vendedor) {
-        vendedor = String(data.vendedor).trim();
-      }
-    }
-  } catch (err) {}
-  if (!vendedor && e && e.parameter && e.parameter.vendedor) {
-    vendedor = String(e.parameter.vendedor).trim();
-  }
-  if (vendedor) {
-    ensureSheet_().appendRow([new Date(), vendedor]);
-  }
-  return ContentService
-    .createTextOutput('{"ok":true}')
-    .setMimeType(ContentService.MimeType.JSON);
+  return doGet(e);
 }

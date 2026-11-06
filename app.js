@@ -86,8 +86,14 @@
 
   function logSellerAccess(vendedor) {
     if (!ACCESS_LOG_URL || !vendedor) return;
-    const url = `${ACCESS_LOG_URL}${ACCESS_LOG_URL.includes("?") ? "&" : "?"}vendedor=${encodeURIComponent(vendedor)}`;
-    // no-cors: o Apps Script registra mesmo sem lermos a resposta
+    const url = `${ACCESS_LOG_URL}${ACCESS_LOG_URL.includes("?") ? "&" : "?"}vendedor=${encodeURIComponent(vendedor)}&t=${Date.now()}`;
+    // Image + fetch: mais confiável com o redirect do Apps Script
+    try {
+      const img = new Image();
+      img.src = url;
+    } catch (err) {
+      // ignore
+    }
     fetch(url, { method: "GET", mode: "no-cors", keepalive: true }).catch(() => {});
   }
 
