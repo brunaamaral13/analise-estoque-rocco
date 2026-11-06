@@ -435,12 +435,34 @@ h1, h2, p { margin: 0; }
     linear-gradient(135deg, rgba(181, 25, 26, 0.06), rgba(255, 255, 255, 0.9)),
     var(--card);
 }
-.summary-card span {
+.summary-card span,
+.summary-card .card-label {
   font-size: 12px;
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--muted);
   font-weight: 560;
+}
+.card-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.kpi-ico,
+.chip-ico {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.summary-card .kpi-ico {
+  color: var(--red);
+  width: 16px;
+  height: 16px;
 }
 .summary-card strong {
   font-family: var(--serif);
@@ -477,6 +499,9 @@ h1, h2, p { margin: 0; }
   color: var(--ink);
   font-weight: 560;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
 }
 .roteiro-actions button:hover {
@@ -531,6 +556,9 @@ h1, h2, p { margin: 0; }
   color: var(--muted);
   font-weight: 460;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
 }
 .chip:hover {
