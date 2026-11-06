@@ -418,20 +418,24 @@
 
     if (saldo <= 0) return { key: "zero", label: "Sem estoque", className: "badge-zero" };
 
-    // Reposição do Top 150 tem prioridade sobre acerto/devolução.
-    if (inTop150) {
-      if (saldo <= 3) return { key: "urgent", label: "Repor com<br>urgência", className: "badge-urgent" };
-      if (saldo <= 7) return { key: "alert", label: "Alerta<br>reposição", className: "badge-alert" };
-    }
+    const fdias = stock.fdias || 0;
 
-    if ((stock.fdias || 0) >= IDLE_DAYS_LONG) {
+    // 180+ dias: sempre "Pedir devolução", mesmo no Top 150.
+    if (fdias >= IDLE_DAYS_LONG) {
       return {
         key: "idle180",
         label: "Pedir<br>devolução",
         className: "badge-return",
       };
     }
-    if ((stock.fdias || 0) >= IDLE_DAYS) {
+
+    // Reposição do Top 150 tem prioridade sobre acerto 90+.
+    if (inTop150) {
+      if (saldo <= 3) return { key: "urgent", label: "Repor com<br>urgência", className: "badge-urgent" };
+      if (saldo <= 7) return { key: "alert", label: "Alerta<br>reposição", className: "badge-alert" };
+    }
+
+    if (fdias >= IDLE_DAYS) {
       return {
         key: "idle",
         label: "Puxar acerto/<br>pedir devolução",
