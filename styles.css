@@ -163,6 +163,24 @@ h1, h2, p { margin: 0; }
   border-color: #f3c4ca;
   color: var(--down);
 }
+.active-filters-bar .clear-filters-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 7px 12px;
+  border: 1px solid var(--red);
+  background: #fff;
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 560;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.active-filters-bar .clear-filters-main:hover {
+  background: var(--red);
+  color: #fff;
+}
 .btn-import {
   margin-top: 12px;
   width: 100%;

@@ -761,6 +761,7 @@
         <span class="filter-chip"><em>Base</em> Mais vendidos</span>
         <span class="filter-chip ${tone}"><em>Filtro</em> ${escapeHtml(filterLabel)}</span>
         ${search ? `<span class="filter-chip"><em>Busca</em> ${escapeHtml(search)}</span>` : ""}
+        ${hasTableFilter ? `<button type="button" class="clear-filters-main" id="btnClearFiltersMain">Limpar filtros</button>` : ""}
       `;
     }
   }
@@ -1062,6 +1063,13 @@
 
   if (els.btnClearFilters) {
     els.btnClearFilters.addEventListener("click", () => clearTableFilters());
+  }
+
+  if (els.mainActiveFilters) {
+    els.mainActiveFilters.addEventListener("click", (e) => {
+      if (!e.target.closest("#btnClearFiltersMain, .clear-filters-main")) return;
+      clearTableFilters();
+    });
   }
 
   els.filters.addEventListener("click", (e) => {
