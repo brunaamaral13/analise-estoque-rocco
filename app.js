@@ -675,19 +675,27 @@
     render();
   }
 
+  function setClientResultsOpen(open) {
+    if (!els.clientResults) return;
+    els.clientResults.hidden = !open;
+    const search = els.clientQuery?.closest(".client-search");
+    if (search) search.classList.toggle("is-open", open);
+    if (els.clientQuery) els.clientQuery.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
   function renderClientResults(list) {
     if (!els.clientResults) return;
 
     const q = state.clientQuery.trim();
     if (!q) {
-      els.clientResults.hidden = true;
+      setClientResultsOpen(false);
       els.clientResults.innerHTML = "";
       return;
     }
 
-    els.clientResults.hidden = false;
     if (!list.length) {
       els.clientResults.innerHTML = `<p class="client-results-empty">Nenhum cliente com esse código ou nome.</p>`;
+      setClientResultsOpen(true);
       return;
     }
 
@@ -697,7 +705,7 @@
       : "";
 
     els.clientResults.innerHTML = `
-      <div class="client-results-head">${list.length.toLocaleString("pt-BR")} cliente(s) encontrado(s) — clique para abrir</div>
+      <div class="client-results-head">${list.length.toLocaleString("pt-BR")} cliente(s) — clique para selecionar</div>
       ${shown.map((c) => {
         const place = [c.cidade, c.estado].filter(Boolean).join("/");
         const active = state.selectedClient?.codigo === c.codigo ? " is-active" : "";
@@ -711,29 +719,28 @@
       }).join("")}
       ${more}
     `;
+    setClientResultsOpen(true);
   }
 
   function renderClientPicker() {
     const hasClients = state.clients.length > 0;
-    els.clientBar.hidden = !hasClients;
+    if (els.clientBar) els.clientBar.hidden = !hasClients;
     if (!hasClients) return;
 
-    const list = filteredClients();
     const selectedCode = state.selectedClient?.codigo || "";
     const placeholderSelected = selectedCode ? "" : " selected";
-    const options = list.length
-      ? list
-        .map((c) => {
-          const label = `${c.codigo} · ${c.nome}`;
-          const selected = c.codigo === selectedCode ? " selected" : "";
-          return `<option value="${escapeHtml(c.codigo)}"${selected}>${escapeHtml(label)}</option>`;
-        })
-        .join("")
-      : `<option value="" disabled>Nenhum cliente encontrado</option>`;
+    // Select always keeps the full client list.
+    const options = state.clients
+      .map((c) => {
+        const label = `${c.codigo} · ${c.nome}`;
+        const selected = c.codigo === selectedCode ? " selected" : "";
+        return `<option value="${escapeHtml(c.codigo)}"${selected}>${escapeHtml(label)}</option>`;
+      })
+      .join("");
 
     els.clientSelect.innerHTML = `<option value=""${placeholderSelected}>Selecione um cliente</option>${options}`;
     els.clientSelect.value = selectedCode;
-    renderClientResults(list);
+    renderClientResults(filteredClients());
   }
 
   function updateEmptyState() {
@@ -752,13 +759,13 @@
 
   function render() {
     const hasClient = Boolean(state.selectedClient);
-    els.emptyState.hidden = hasClient;
-    els.grid.hidden = !hasClient;
-    els.summary.hidden = !hasClient;
-    els.actions.hidden = !hasClient;
-    els.filters.hidden = !hasClient;
-    els.sideKpis.hidden = !hasClient;
-    els.q.disabled = !hasClient;
+    if (els.emptyState) els.emptyState.hidden = hasClient;
+    if (els.grid) els.grid.hidden = !hasClient;
+    if (els.summary) els.summary.hidden = !hasClient;
+    if (els.actions) els.actions.hidden = !hasClient;
+    if (els.filters) els.filters.hidden = !hasClient;
+    if (els.sideKpis) els.sideKpis.hidden = !hasClient;
+    if (els.q) els.q.disabled = !hasClient;
 
     renderClientPicker();
     updateEmptyState();
@@ -766,7 +773,7 @@
     if (!hasClient) return;
 
     updateKpis();
-    updateActionKpis();
+    if (els.actions) updateActionKpis();
     updateSortHeaders();
     const rows = rowsForRender();
     updateSummary(rows);
@@ -877,7 +884,7 @@
   els.clientSelect.addEventListener("change", (e) => selectClient(e.target.value));
   els.clientQuery.addEventListener("input", (e) => {
     state.clientQuery = e.target.value;
-    renderClientPicker();
+    renderClientResults(filteredClients());
 
     const list = filteredClients();
     const best = pickBestClientMatch(list, state.clientQuery);
@@ -890,18 +897,38 @@
       selectClient(best.codigo);
     }
   });
+  els.clientQuery.addEventListener("focus", () => {
+    if (state.clientQuery.trim()) renderClientResults(filteredClients());
+  });
   els.clientQuery.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      setClientResultsOpen(false);
+      return;
+    }
     if (e.key !== "Enter") return;
     e.preventDefault();
     const list = filteredClients();
     const best = pickBestClientMatch(list, state.clientQuery) || list[0];
     if (!best) return;
     selectClient(best.codigo);
+    setClientResultsOpen(false);
+  });
+  els.clientResults.addEventListener("mousedown", (e) => {
+    // Keep focus behavior predictable before click selection.
+    e.preventDefault();
   });
   els.clientResults.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-code]");
     if (!btn) return;
     selectClient(btn.dataset.code);
+    state.clientQuery = "";
+    els.clientQuery.value = "";
+    setClientResultsOpen(false);
+  });
+  document.addEventListener("click", (e) => {
+    if (!els.clientResults || els.clientResults.hidden) return;
+    if (e.target.closest(".client-search-wrap")) return;
+    setClientResultsOpen(false);
   });
 
   els.q.addEventListener("input", (e) => {

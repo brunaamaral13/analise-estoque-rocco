@@ -64,16 +64,18 @@
           <p class="client-bar-meta" id="clientMeta"></p>
         </div>
         <div class="client-bar-controls">
-          <label class="client-search">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
-            <input id="clientQuery" type="search" placeholder="Digite o código ou nome do cliente" autocomplete="off" aria-label="Pesquisar cliente por código ou nome" aria-autocomplete="list" aria-controls="clientResults">
-          </label>
+          <div class="client-search-wrap">
+            <label class="client-search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+              <input id="clientQuery" type="search" placeholder="Digite o código ou nome do cliente" autocomplete="off" aria-label="Pesquisar cliente por código ou nome" aria-autocomplete="list" aria-controls="clientResults" aria-expanded="false">
+            </label>
+            <div class="client-results" id="clientResults" hidden role="listbox" aria-label="Resultados da busca de clientes"></div>
+          </div>
           <label class="client-select-wrap">
             <span class="sr-only">Lista de clientes</span>
             <select id="clientSelect" aria-label="Lista de clientes"></select>
           </label>
         </div>
-        <div class="client-results" id="clientResults" hidden role="listbox" aria-label="Resultados da busca de clientes"></div>
       </section>
 
       <header class="top">
