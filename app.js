@@ -681,6 +681,7 @@
         <button type="button" class="is-idle" data-filter="parado90">${acerto.toLocaleString("pt-BR")} puxar acerto/pedir devolução (90+)</button>
       </span>
     `;
+    syncFilterActiveState();
     els.sumCoverage.textContent = `${pctStock}% com saldo`;
     els.sumCoverageMeta.textContent = `${pctRupture}% em ruptura · ${withStock}/${top150} com estoque`;
     els.sumIdleValue.textContent = money(valorParado);
@@ -747,11 +748,28 @@
     }
   }
 
-  function applyFilter(filterKey) {
-    state.filter = filterKey;
+  function syncFilterActiveState() {
+    const active = state.filter;
     els.filters.querySelectorAll(".chip").forEach((chip) => {
-      chip.classList.toggle("is-active", chip.dataset.filter === filterKey);
+      chip.classList.toggle("is-active", chip.dataset.filter === active);
+      chip.setAttribute("aria-pressed", chip.dataset.filter === active ? "true" : "false");
     });
+    if (els.sumRoteiro) {
+      els.sumRoteiro.querySelectorAll("[data-filter]").forEach((btn) => {
+        btn.classList.toggle("is-active", btn.dataset.filter === active);
+        btn.setAttribute("aria-pressed", btn.dataset.filter === active ? "true" : "false");
+      });
+    }
+  }
+
+  function applyFilter(filterKey) {
+    // Clique de novo no mesmo filtro desativa (volta para Todos).
+    if (filterKey !== "all" && state.filter === filterKey) {
+      state.filter = "all";
+    } else {
+      state.filter = filterKey;
+    }
+    syncFilterActiveState();
     render();
   }
 
@@ -759,9 +777,7 @@
     state.filter = "all";
     state.query = "";
     if (els.q) els.q.value = "";
-    els.filters.querySelectorAll(".chip").forEach((chip) => {
-      chip.classList.toggle("is-active", chip.dataset.filter === "all");
-    });
+    syncFilterActiveState();
     render();
   }
 

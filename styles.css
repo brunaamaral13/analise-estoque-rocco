@@ -475,6 +475,9 @@ h1, h2, p { margin: 0; }
   padding: 8px 12px;
   font-size: 13px;
   color: var(--ink);
+  font-weight: 560;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
 }
 .roteiro-actions button:hover {
   border-color: var(--ink);
@@ -494,6 +497,24 @@ h1, h2, p { margin: 0; }
   border-color: #c5d2e8;
   color: #2f4a73;
 }
+.roteiro-actions button.is-active {
+  font-weight: 650;
+  box-shadow: 0 4px 14px rgba(28, 34, 48, 0.18);
+  color: #fff;
+}
+.roteiro-actions .is-urgent.is-active {
+  background: var(--red);
+  border-color: var(--red-deep);
+  box-shadow: 0 4px 14px rgba(181, 25, 26, 0.28);
+}
+.roteiro-actions .is-alert.is-active {
+  background: #b8840a;
+  border-color: #8f6808;
+}
+.roteiro-actions .is-idle.is-active {
+  background: #2f4a73;
+  border-color: #223656;
+}
 
 .filters {
   display: flex;
@@ -508,11 +529,20 @@ h1, h2, p { margin: 0; }
   padding: 8px 14px;
   font-size: 13px;
   color: var(--muted);
+  font-weight: 460;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.chip:hover {
+  border-color: #b8beca;
+  color: var(--ink);
 }
 .chip.is-active {
-  background: var(--ink);
-  border-color: var(--ink);
+  background: var(--red);
+  border-color: var(--red-deep);
   color: #fff;
+  font-weight: 650;
+  box-shadow: 0 4px 14px rgba(181, 25, 26, 0.28);
 }
 
 .table-wrap {
