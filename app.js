@@ -416,15 +416,23 @@
     const saldo = stock.consignado || 0;
     const inTop150 = ranking != null && ranking >= 1 && ranking <= TOP_SALDO_RANK;
 
+    if (saldo <= 0) return { key: "zero", label: "Sem estoque", className: "badge-zero" };
+
+    // Reposição do Top 150 tem prioridade sobre acerto/devolução.
     if (inTop150) {
-      if (saldo <= 0) return { key: "zero", label: "Sem estoque", className: "badge-zero" };
       if (saldo <= 3) return { key: "urgent", label: "Repor com<br>urgência", className: "badge-urgent" };
       if (saldo <= 7) return { key: "alert", label: "Alerta<br>reposição", className: "badge-alert" };
-      return { key: "ok", label: "Com saldo", className: "badge-ok" };
     }
 
-    if (saldo <= 0) return { key: "zero", label: "Sem estoque", className: "badge-zero" };
-    if ((stock.fdias || 0) >= IDLE_DAYS) return { key: "idle", label: "Parado", className: "badge-idle" };
+    if ((stock.fdias || 0) >= IDLE_DAYS) {
+      return {
+        key: "idle",
+        label: "Puxar acerto/<br>pedir devolução",
+        className: "badge-idle",
+      };
+    }
+
+    if (inTop150) return { key: "ok", label: "Com saldo", className: "badge-ok" };
     return { key: "ok", label: "Com estoque", className: "badge-ok" };
   }
 
@@ -530,8 +538,14 @@
         ) return false;
         if (state.filter === "urgent" && row.sit.key !== "urgent") return false;
         if (state.filter === "alert" && row.sit.key !== "alert") return false;
-        if (state.filter === "parado90" && (row.stock?.fdias || 0) < IDLE_DAYS) return false;
-        if (state.filter === "parado180" && (row.stock?.fdias || 0) < IDLE_DAYS_LONG) return false;
+        if (state.filter === "parado90") {
+          if ((row.stock?.consignado || 0) <= 0) return false;
+          if ((row.stock?.fdias || 0) < IDLE_DAYS) return false;
+        }
+        if (state.filter === "parado180") {
+          if ((row.stock?.consignado || 0) <= 0) return false;
+          if ((row.stock?.fdias || 0) < IDLE_DAYS_LONG) return false;
+        }
         if (!q) return true;
         const blob = `${row.titulo} ${row.autor} ${row.isbn}`.toLowerCase();
         return blob.includes(q);
@@ -664,7 +678,7 @@
       <span class="roteiro-actions">
         <button type="button" class="is-urgent" data-filter="urgent">${urgent.toLocaleString("pt-BR")} repor urgente</button>
         <button type="button" class="is-alert" data-filter="alert">${alert.toLocaleString("pt-BR")} alerta</button>
-        <button type="button" class="is-idle" data-filter="parado90">${acerto.toLocaleString("pt-BR")} puxar acerto/pedir devolução</button>
+        <button type="button" class="is-idle" data-filter="parado90">${acerto.toLocaleString("pt-BR")} puxar acerto/pedir devolução (90+)</button>
       </span>
     `;
     els.sumCoverage.textContent = `${pctStock}% com saldo`;

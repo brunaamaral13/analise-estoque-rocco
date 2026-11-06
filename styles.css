@@ -490,9 +490,9 @@ h1, h2, p { margin: 0; }
   color: #7a5608;
 }
 .roteiro-actions .is-idle {
-  background: #eef0f5;
-  border-color: var(--line);
-  color: var(--muted);
+  background: #e8eef8;
+  border-color: #c5d2e8;
+  color: #2f4a73;
 }
 
 .filters {
@@ -668,7 +668,7 @@ h1, h2, p { margin: 0; }
 .badge-zero,
 .badge-urgent { background: #fdecee; color: var(--down); }
 .badge-alert { background: #fff4d6; color: #7a5608; }
-.badge-idle { background: #fff4d6; color: #7a5608; }
+.badge-idle { background: #e8eef8; color: #2f4a73; }
 .badge-miss { background: #eef0f5; color: var(--muted); }
 
 .row-zero td { background: rgba(157, 44, 60, 0.03); }
