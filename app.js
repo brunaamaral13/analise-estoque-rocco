@@ -21,6 +21,9 @@
     kpiIdle: document.getElementById("kpiIdle"),
     kpiIdle180: document.getElementById("kpiIdle180"),
     topSub: document.getElementById("topSub"),
+    sideActiveFilters: document.getElementById("sideActiveFilters"),
+    mainActiveFilters: document.getElementById("mainActiveFilters"),
+    btnClearFilters: document.getElementById("btnClearFilters"),
     q: document.getElementById("q"),
     summary: document.getElementById("summary"),
     sumIsbns: document.getElementById("sumIsbns"),
@@ -610,7 +613,8 @@
   function updateActionKpis() {
     let urgent = 0;
     let alert = 0;
-    let devolver = 0;
+    let acerto = 0;
+    let idle180Count = 0;
     let top150 = 0;
     let withStock = 0;
     let rupture = 0;
@@ -645,9 +649,12 @@
 
     state.stockByKey.forEach((stock) => {
       if ((stock.consignado || 0) <= 0) return;
-      if ((stock.fdias || 0) < IDLE_DAYS_LONG) return;
-      devolver += 1;
-      valorParado += stock.valorLiquido || 0;
+      const fdias = stock.fdias || 0;
+      if (fdias >= IDLE_DAYS) acerto += 1;
+      if (fdias >= IDLE_DAYS_LONG) {
+        idle180Count += 1;
+        valorParado += stock.valorLiquido || 0;
+      }
     });
 
     const pctStock = top150 ? Math.round((withStock / top150) * 100) : 0;
@@ -657,20 +664,89 @@
       <span class="roteiro-actions">
         <button type="button" class="is-urgent" data-filter="urgent">${urgent.toLocaleString("pt-BR")} repor urgente</button>
         <button type="button" class="is-alert" data-filter="alert">${alert.toLocaleString("pt-BR")} alerta</button>
-        <button type="button" class="is-idle" data-filter="parado180">${devolver.toLocaleString("pt-BR")} pedir devolução (180+)</button>
+        <button type="button" class="is-idle" data-filter="parado90">${acerto.toLocaleString("pt-BR")} puxar acerto/pedir devolução</button>
       </span>
     `;
     els.sumCoverage.textContent = `${pctStock}% com saldo`;
     els.sumCoverageMeta.textContent = `${pctRupture}% em ruptura · ${withStock}/${top150} com estoque`;
     els.sumIdleValue.textContent = money(valorParado);
-    els.sumIdleMeta.textContent = `${devolver.toLocaleString("pt-BR")} ISBN(s) candidatos a devolução`;
+    els.sumIdleMeta.textContent = `${idle180Count.toLocaleString("pt-BR")} ISBN(s) parados há 180+ dias`;
     els.sumRestockValue.textContent = money(potencial);
+  }
+
+  const FILTER_LABELS = {
+    all: "Todos",
+    ranking: "Top 500",
+    extra: "Fora do ranking",
+    com: "Com estoque",
+    sem: "Sem estoque",
+    urgent: "Repor com urgência",
+    alert: "Alerta reposição",
+    parado90: "Puxar acerto/pedir devolução (90+ dias)",
+    parado180: "Parados 180+ dias",
+  };
+
+  function filterTone(filterKey) {
+    if (filterKey === "urgent" || filterKey === "sem") return "is-danger";
+    if (filterKey === "alert" || filterKey === "parado90" || filterKey === "parado180") return "is-warn";
+    return "";
+  }
+
+  function updateActiveFilters() {
+    const client = state.selectedClient;
+    const filterLabel = FILTER_LABELS[state.filter] || state.filter;
+    const search = state.query.trim();
+    const hasTableFilter = state.filter !== "all" || Boolean(search);
+
+    if (els.btnClearFilters) {
+      els.btnClearFilters.hidden = !client || !hasTableFilter;
+    }
+
+    if (els.sideActiveFilters) {
+      if (!client) {
+        els.sideActiveFilters.innerHTML = `<li>Nenhum cliente selecionado</li>`;
+      } else {
+        els.sideActiveFilters.innerHTML = `
+          <li><strong>Cliente</strong>${escapeHtml(client.codigo)} · ${escapeHtml(client.nome)}</li>
+          <li><strong>Base</strong>Mais vendidos Rocco (Top 500)</li>
+          <li><strong>Filtro da tabela</strong>${escapeHtml(filterLabel)}</li>
+          <li><strong>Busca de título</strong>${search ? escapeHtml(search) : "Nenhuma"}</li>
+        `;
+      }
+    }
+
+    if (els.mainActiveFilters) {
+      if (!client) {
+        els.mainActiveFilters.hidden = true;
+        els.mainActiveFilters.innerHTML = "";
+        return;
+      }
+
+      els.mainActiveFilters.hidden = false;
+      const tone = filterTone(state.filter);
+      els.mainActiveFilters.innerHTML = `
+        <span class="filter-chip"><em>Cliente</em> ${escapeHtml(client.codigo)} · ${escapeHtml(client.nome)}</span>
+        <span class="filter-chip"><em>Base</em> Mais vendidos</span>
+        <span class="filter-chip ${tone}"><em>Filtro</em> ${escapeHtml(filterLabel)}</span>
+        ${search ? `<span class="filter-chip"><em>Busca</em> ${escapeHtml(search)}</span>` : ""}
+      `;
+    }
   }
 
   function applyFilter(filterKey) {
     state.filter = filterKey;
     els.filters.querySelectorAll(".chip").forEach((chip) => {
       chip.classList.toggle("is-active", chip.dataset.filter === filterKey);
+    });
+    render();
+  }
+
+  function clearTableFilters() {
+    state.filter = "all";
+    state.query = "";
+    if (els.q) els.q.value = "";
+    els.filters.querySelectorAll(".chip").forEach((chip) => {
+      chip.classList.toggle("is-active", chip.dataset.filter === "all");
     });
     render();
   }
@@ -769,6 +845,7 @@
 
     renderClientPicker();
     updateEmptyState();
+    updateActiveFilters();
 
     if (!hasClient) return;
 
@@ -935,6 +1012,10 @@
     state.query = e.target.value;
     render();
   });
+
+  if (els.btnClearFilters) {
+    els.btnClearFilters.addEventListener("click", () => clearTableFilters());
+  }
 
   els.filters.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-filter]");

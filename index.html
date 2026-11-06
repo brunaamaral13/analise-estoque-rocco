@@ -25,6 +25,14 @@
         <p class="panel-note">Atualizado só por você. Vendedores não editam esta lista.</p>
       </section>
 
+      <section class="panel panel-filters" id="sideFiltersPanel">
+        <p class="panel-label">Em análise agora</p>
+        <ul class="active-filters" id="sideActiveFilters">
+          <li>Nenhum cliente selecionado</li>
+        </ul>
+        <button type="button" class="side-clear-filters" id="btnClearFilters" hidden>Limpar filtros da tabela</button>
+      </section>
+
       <section class="panel panel-import">
         <p class="panel-label">Cliente</p>
         <p class="panel-title">Importar Mapão</p>
@@ -82,6 +90,7 @@
         <div>
           <h1>Cruzamento · mais vendidos × estoque do cliente</h1>
           <p id="topSub">Importe o Mapão do cliente para ver o saldo ao lado do ranking Rocco.</p>
+          <div class="active-filters-bar" id="mainActiveFilters" hidden></div>
         </div>
         <label class="search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
@@ -136,7 +145,7 @@
         <button type="button" class="chip" data-filter="sem">Sem estoque</button>
         <button type="button" class="chip" data-filter="urgent">Repor com urgência</button>
         <button type="button" class="chip" data-filter="alert">Alerta reposição</button>
-        <button type="button" class="chip" data-filter="parado90">Parados 90+ dias</button>
+        <button type="button" class="chip" data-filter="parado90">Puxar acerto/pedir devolução (90+)</button>
         <button type="button" class="chip" data-filter="parado180">Parados 180+ dias</button>
       </section>
 
