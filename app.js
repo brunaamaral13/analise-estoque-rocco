@@ -488,6 +488,7 @@
   function expandCnpjCandidate(value) {
     if (value == null || value === "") return "";
     let raw = String(value).trim();
+    // Aceita "41.778.264/0005-81", "41778264000581" e notação científica do Excel.
     if (/[eE][+-]?\d+/.test(raw)) {
       const n = Number(raw.replace(/\./g, "").replace(",", "."));
       if (!Number.isFinite(n) || n <= 0) return "";
@@ -496,22 +497,25 @@
     const digits = raw.replace(/\D/g, "");
     if (!digits) return "";
     // Excel costuma cortar zeros à esquerda do CNPJ (14 dígitos).
-    if (digits.length > 0 && digits.length < 14) return digits.padStart(14, "0");
+    if (digits.length < 14) return digits.padStart(14, "0");
+    if (digits.length > 14) return digits.slice(-14);
     return digits;
   }
 
   function formatCnpj(digits) {
-    const d = String(digits || "").replace(/\D/g, "");
-    if (d.length !== 14) return d || "";
+    const d = expandCnpjCandidate(digits);
+    if (d.length !== 14) return String(digits || "").replace(/\D/g, "") || "";
     return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
   }
 
   function cnpjMatches(clientCnpj, query) {
     const cnpj = expandCnpjCandidate(clientCnpj);
-    const qDigits = String(query || "").replace(/\D/g, "");
-    if (!cnpj || !qDigits) return false;
-    if (cnpj === qDigits || cnpj === qDigits.padStart(14, "0")) return true;
-    if (qDigits.length >= 8 && (cnpj.includes(qDigits) || qDigits.includes(cnpj.replace(/^0+/, "")))) return true;
+    const q = expandCnpjCandidate(query);
+    if (!cnpj || !q) return false;
+    if (cnpj === q) return true;
+    const qRaw = String(query || "").replace(/\D/g, "");
+    if (qRaw.length >= 8 && qRaw.length < 14 && cnpj.includes(qRaw)) return true;
+    if (qRaw.length >= 8 && cnpj.replace(/^0+/, "") === qRaw.replace(/^0+/, "")) return true;
     return false;
   }
 
@@ -1435,13 +1439,14 @@
     const list = filteredClients();
     const best = pickBestClientMatch(list, state.clientQuery);
     const rawQ = state.clientQuery.trim();
-    const onlyDigits = /^\d+$/.test(rawQ);
+    const qDigits = rawQ.replace(/\D/g, "");
+    const looksNumericId = qDigits.length >= 8 && qDigits.length === rawQ.replace(/[.\-\/\s]/g, "").length;
     const exactCode = best && normalizeSearch(best.codigo) === normalizeSearch(rawQ);
-    const exactCnpj = best && onlyDigits && rawQ.length >= 11 && cnpjMatches(best.cnpj, rawQ);
+    const exactCnpj = best && qDigits.length >= 11 && cnpjMatches(best.cnpj, rawQ);
     if (
       best
       && best.codigo !== state.selectedClient?.codigo
-      && onlyDigits
+      && looksNumericId
       && (exactCode || exactCnpj)
     ) {
       selectClient(best.codigo);
