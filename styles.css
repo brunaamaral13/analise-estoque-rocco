@@ -232,6 +232,7 @@ h1, h2, p { margin: 0; }
   font-size: 13px;
   color: var(--ink);
   box-shadow: var(--shadow);
+  font-family: inherit;
 }
 .active-filters-bar .filter-chip em {
   font-style: normal;
@@ -248,6 +249,23 @@ h1, h2, p { margin: 0; }
   background: #fdecee;
   border-color: #f3c4ca;
   color: var(--down);
+}
+.active-filters-bar .filter-chip.is-removable {
+  cursor: pointer;
+  padding-right: 10px;
+}
+.active-filters-bar .filter-chip.is-removable:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+.active-filters-bar .filter-chip .chip-x {
+  margin-left: 2px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--muted);
+}
+.active-filters-bar .filter-chip.is-removable:hover .chip-x {
+  color: var(--red);
 }
 .active-filters-bar .clear-filters-main {
   display: inline-flex;

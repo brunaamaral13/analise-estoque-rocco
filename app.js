@@ -1048,12 +1048,15 @@
 
       els.mainActiveFilters.hidden = false;
       const tone = filterTone(state.filter);
+      const hasActiveFilter = state.filter !== "all";
       els.mainActiveFilters.innerHTML = `
-        ${state.seller ? `<span class="filter-chip"><em>Vendedor</em> ${escapeHtml(state.seller)}</span>` : ""}
-        <span class="filter-chip"><em>Cliente</em> ${escapeHtml(client.codigo)} · ${escapeHtml(client.nome)}</span>
+        ${state.seller ? `<button type="button" class="filter-chip is-removable" data-clear="seller" title="Trocar vendedor"><em>Vendedor</em> ${escapeHtml(state.seller)} <span class="chip-x" aria-hidden="true">×</span></button>` : ""}
+        <button type="button" class="filter-chip is-removable" data-clear="client" title="Remover cliente"><em>Cliente</em> ${escapeHtml(client.codigo)} · ${escapeHtml(client.nome)} <span class="chip-x" aria-hidden="true">×</span></button>
         <span class="filter-chip"><em>Base</em> Mais vendidos</span>
-        <span class="filter-chip ${tone}"><em>Filtro</em> ${escapeHtml(filterLabel)}</span>
-        ${search ? `<span class="filter-chip"><em>Busca</em> ${escapeHtml(search)}</span>` : ""}
+        ${hasActiveFilter
+          ? `<button type="button" class="filter-chip is-removable ${tone}" data-clear="filter" title="Remover filtro"><em>Filtro</em> ${escapeHtml(filterLabel)} <span class="chip-x" aria-hidden="true">×</span></button>`
+          : `<span class="filter-chip ${tone}"><em>Filtro</em> ${escapeHtml(filterLabel)}</span>`}
+        ${search ? `<button type="button" class="filter-chip is-removable" data-clear="search" title="Remover busca"><em>Busca</em> ${escapeHtml(search)} <span class="chip-x" aria-hidden="true">×</span></button>` : ""}
         <button type="button" class="clear-filters-main" id="btnClearFiltersMain"${hasTableFilter ? "" : " disabled"}>Limpar filtros</button>
       `;
     }
@@ -1542,8 +1545,35 @@
 
   if (els.mainActiveFilters) {
     els.mainActiveFilters.addEventListener("click", (e) => {
-      if (!e.target.closest("#btnClearFiltersMain, .clear-filters-main")) return;
-      clearTableFilters();
+      if (e.target.closest("#btnClearFiltersMain, .clear-filters-main")) {
+        clearTableFilters();
+        return;
+      }
+      const chip = e.target.closest("[data-clear]");
+      if (!chip) return;
+      const action = chip.dataset.clear;
+      if (action === "filter") {
+        state.filter = "all";
+        syncFilterActiveState();
+        render();
+        return;
+      }
+      if (action === "search") {
+        state.query = "";
+        if (els.q) els.q.value = "";
+        setTitleResultsOpen(false);
+        if (els.titleResults) els.titleResults.innerHTML = "";
+        render();
+        return;
+      }
+      if (action === "client") {
+        clearIsbnSearch();
+        selectClient("");
+        return;
+      }
+      if (action === "seller") {
+        showSellerGate();
+      }
     });
   }
 
