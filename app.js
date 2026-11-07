@@ -485,18 +485,52 @@
     return null;
   }
 
+  function expandCnpjCandidate(value) {
+    if (value == null || value === "") return "";
+    let raw = String(value).trim();
+    if (/[eE][+-]?\d+/.test(raw)) {
+      const n = Number(raw.replace(/\./g, "").replace(",", "."));
+      if (!Number.isFinite(n) || n <= 0) return "";
+      raw = String(Math.round(n));
+    }
+    const digits = raw.replace(/\D/g, "");
+    if (!digits) return "";
+    // Excel costuma cortar zeros à esquerda do CNPJ (14 dígitos).
+    if (digits.length > 0 && digits.length < 14) return digits.padStart(14, "0");
+    return digits;
+  }
+
+  function formatCnpj(digits) {
+    const d = String(digits || "").replace(/\D/g, "");
+    if (d.length !== 14) return d || "";
+    return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  }
+
+  function cnpjMatches(clientCnpj, query) {
+    const cnpj = expandCnpjCandidate(clientCnpj);
+    const qDigits = String(query || "").replace(/\D/g, "");
+    if (!cnpj || !qDigits) return false;
+    if (cnpj === qDigits || cnpj === qDigits.padStart(14, "0")) return true;
+    if (qDigits.length >= 8 && (cnpj.includes(qDigits) || qDigits.includes(cnpj.replace(/^0+/, "")))) return true;
+    return false;
+  }
+
   function listClients(rows) {
     const byCode = new Map();
     rows.forEach((r) => {
       const code = String(r.codigo || "").trim();
       if (!code) return;
+      const cnpj = expandCnpjCandidate(r.cnpj);
       if (!byCode.has(code)) {
         byCode.set(code, {
           codigo: code,
           nome: r.nome || "Cliente sem nome",
           cidade: r.cidade || "",
           estado: r.estado || "",
+          cnpj,
         });
+      } else if (cnpj && !byCode.get(code).cnpj) {
+        byCode.get(code).cnpj = cnpj;
       }
     });
     return [...byCode.values()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
@@ -675,11 +709,15 @@
   }
 
   function filteredClients() {
-    const q = normalizeSearch(state.clientQuery);
+    const raw = state.clientQuery;
+    const q = normalizeSearch(raw);
     if (!q) return state.clients;
+    const qDigits = String(raw || "").replace(/\D/g, "");
     return state.clients.filter((c) => {
-      const blob = normalizeSearch(`${c.codigo} ${c.nome} ${c.cidade} ${c.estado}`);
-      return blob.includes(q) || normalizeSearch(c.codigo).startsWith(q);
+      const blob = normalizeSearch(`${c.codigo} ${c.nome} ${c.cidade} ${c.estado} ${c.cnpj || ""} ${formatCnpj(c.cnpj)}`);
+      if (blob.includes(q) || normalizeSearch(c.codigo).startsWith(q)) return true;
+      if (qDigits.length >= 8 && cnpjMatches(c.cnpj, raw)) return true;
+      return false;
     });
   }
 
@@ -688,6 +726,8 @@
     if (!q || !list.length) return null;
     const exactCode = list.find((c) => normalizeSearch(c.codigo) === q);
     if (exactCode) return exactCode;
+    const exactCnpj = list.find((c) => cnpjMatches(c.cnpj, query));
+    if (exactCnpj) return exactCnpj;
     if (list.length === 1) return list[0];
     return null;
   }
@@ -1110,7 +1150,7 @@
     }
 
     if (!list.length) {
-      els.clientResults.innerHTML = `<p class="client-results-empty">Nenhum cliente com esse código ou nome.</p>`;
+      els.clientResults.innerHTML = `<p class="client-results-empty">Nenhum cliente com esse código, nome ou CNPJ.</p>`;
       setClientResultsOpen(true);
       return;
     }
@@ -1124,11 +1164,13 @@
       <div class="client-results-head">${list.length.toLocaleString("pt-BR")} cliente(s) — clique para selecionar</div>
       ${shown.map((c) => {
         const place = [c.cidade, c.estado].filter(Boolean).join("/");
+        const cnpjLabel = c.cnpj ? formatCnpj(c.cnpj) : "";
         const active = state.selectedClient?.codigo === c.codigo ? " is-active" : "";
         return `
           <button type="button" class="client-result${active}" data-code="${escapeHtml(c.codigo)}" role="option" aria-selected="${state.selectedClient?.codigo === c.codigo}">
             <strong>${escapeHtml(c.codigo)}</strong>
             <span>${escapeHtml(c.nome)}</span>
+            ${cnpjLabel ? `<small>CNPJ ${escapeHtml(cnpjLabel)}</small>` : ""}
             ${place ? `<small>${escapeHtml(place)}</small>` : ""}
           </button>
         `;
@@ -1392,11 +1434,15 @@
 
     const list = filteredClients();
     const best = pickBestClientMatch(list, state.clientQuery);
+    const rawQ = state.clientQuery.trim();
+    const onlyDigits = /^\d+$/.test(rawQ);
+    const exactCode = best && normalizeSearch(best.codigo) === normalizeSearch(rawQ);
+    const exactCnpj = best && onlyDigits && rawQ.length >= 11 && cnpjMatches(best.cnpj, rawQ);
     if (
       best
       && best.codigo !== state.selectedClient?.codigo
-      && /^\d+$/.test(state.clientQuery.trim())
-      && normalizeSearch(best.codigo) === normalizeSearch(state.clientQuery)
+      && onlyDigits
+      && (exactCode || exactCnpj)
     ) {
       selectClient(best.codigo);
     }
