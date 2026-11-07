@@ -59,6 +59,7 @@
     mainActiveFilters: document.getElementById("mainActiveFilters"),
     btnClearFilters: document.getElementById("btnClearFilters"),
     q: document.getElementById("q"),
+    titleResults: document.getElementById("titleResults"),
     summary: document.getElementById("summary"),
     sumIsbns: document.getElementById("sumIsbns"),
     sumVolume: document.getElementById("sumVolume"),
@@ -1131,6 +1132,8 @@
     state.filter = "all";
     state.query = "";
     if (els.q) els.q.value = "";
+    setTitleResultsOpen(false);
+    if (els.titleResults) els.titleResults.innerHTML = "";
     syncFilterActiveState();
     render();
   }
@@ -1486,9 +1489,102 @@
     setClientResultsOpen(false);
   });
 
+  function setTitleResultsOpen(open) {
+    if (!els.titleResults) return;
+    els.titleResults.hidden = !open;
+    const search = els.q?.closest(".search");
+    if (search) search.classList.toggle("is-open", open);
+    if (els.q) els.q.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function titleSuggestions(query) {
+    const q = String(query || "").trim().toLowerCase();
+    if (!q || !state.selectedClient) return [];
+
+    const seen = new Set();
+    const matches = [];
+    buildAllRows().forEach((row) => {
+      const blob = `${row.titulo} ${row.autor} ${row.isbn}`.toLowerCase();
+      if (!blob.includes(q)) return;
+      const key = `${row.isbn}|${row.titulo}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      matches.push(row);
+    });
+
+    return matches
+      .sort((a, b) => {
+        const aRank = a.inRanking ? a.ranking : Number.POSITIVE_INFINITY;
+        const bRank = b.inRanking ? b.ranking : Number.POSITIVE_INFINITY;
+        if (aRank !== bRank) return aRank - bRank;
+        return String(a.titulo || "").localeCompare(String(b.titulo || ""), "pt-BR");
+      })
+      .slice(0, 20);
+  }
+
+  function renderTitleResults(list) {
+    if (!els.titleResults) return;
+    const q = state.query.trim();
+    if (!q || !state.selectedClient) {
+      setTitleResultsOpen(false);
+      els.titleResults.innerHTML = "";
+      return;
+    }
+
+    if (!list.length) {
+      els.titleResults.innerHTML = `<p class="title-results-empty">Nenhum título, autor ou ISBN com esse texto.</p>`;
+      setTitleResultsOpen(true);
+      return;
+    }
+
+    els.titleResults.innerHTML = `
+      <div class="title-results-head">${list.length.toLocaleString("pt-BR")} sugestão(ões) — clique para filtrar</div>
+      ${list.map((row) => {
+        const saldo = row.stock?.consignado;
+        const meta = [
+          row.isbn || "",
+          row.inRanking ? `Ranking ${row.ranking}` : "Fora do ranking",
+          saldo == null ? "Sem saldo" : `Saldo ${saldo.toLocaleString("pt-BR")}`,
+        ].filter(Boolean).join(" · ");
+        return `
+          <button type="button" class="title-result" data-query="${escapeHtml(row.titulo || row.isbn || "")}" role="option">
+            <strong>${escapeHtml(row.titulo || "Sem título")}</strong>
+            <span>${escapeHtml(row.autor || "—")}</span>
+            <small>${escapeHtml(meta)}</small>
+          </button>
+        `;
+      }).join("")}
+    `;
+    setTitleResultsOpen(true);
+  }
+
   els.q.addEventListener("input", (e) => {
     state.query = e.target.value;
+    renderTitleResults(titleSuggestions(state.query));
     render();
+  });
+  els.q.addEventListener("focus", () => {
+    if (state.query.trim()) renderTitleResults(titleSuggestions(state.query));
+  });
+  els.q.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") setTitleResultsOpen(false);
+  });
+  if (els.titleResults) {
+    els.titleResults.addEventListener("mousedown", (e) => e.preventDefault());
+    els.titleResults.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-query]");
+      if (!btn) return;
+      const value = btn.dataset.query || "";
+      state.query = value;
+      if (els.q) els.q.value = value;
+      setTitleResultsOpen(false);
+      render();
+    });
+  }
+  document.addEventListener("click", (e) => {
+    if (!els.titleResults || els.titleResults.hidden) return;
+    if (e.target.closest(".title-search-wrap")) return;
+    setTitleResultsOpen(false);
   });
 
   if (els.btnClearFilters) {
