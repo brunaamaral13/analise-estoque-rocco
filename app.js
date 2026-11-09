@@ -516,23 +516,34 @@
     return false;
   }
 
-  function findClientsByIsbn(rawQuery) {
-    const q = String(rawQuery || "").trim();
+  function findClientsByProduct({ rawQuery = "", exactTitle = "", exactIsbn = "" } = {}) {
+    const q = String(rawQuery || exactTitle || exactIsbn || "").trim();
     if (!q || !state.mapaRows.length) return null;
 
-    const aliasSet = new Set(isbnAliases(q));
-    const normalized = normalizeIsbn(q);
+    const aliasSet = new Set(isbnAliases(exactIsbn || q));
+    const normalized = normalizeIsbn(exactIsbn || q);
     if (normalized) aliasSet.add(normalized);
-    const queryDigits = q.replace(/\D/g, "");
+    const queryDigits = String(exactIsbn || q).replace(/\D/g, "");
+    const titleNeedle = normalizeTitle(exactTitle || (!exactIsbn && queryDigits.length < 10 ? q : ""));
+    const hasIsbnNeedle = aliasSet.size > 0 || queryDigits.length >= 10;
 
-    if (!aliasSet.size && queryDigits.length < 10) return { query: q, titulo: "", isbn: "", clients: [] };
+    if (!hasIsbnNeedle && !titleNeedle) {
+      return { query: q, titulo: "", isbn: "", clients: [] };
+    }
 
     const byClient = new Map();
-    let titulo = "";
-    let isbn = normalized || queryDigits;
+    let titulo = exactTitle || "";
+    let isbn = normalized || (queryDigits.length >= 10 ? queryDigits : "");
 
     state.mapaRows.forEach((r) => {
-      if (!rowMatchesIsbn(r, aliasSet, queryDigits)) return;
+      const matchIsbn = hasIsbnNeedle && rowMatchesIsbn(r, aliasSet, queryDigits);
+      const matchTitle = titleNeedle
+        && (
+          exactTitle
+            ? normalizeTitle(r.titulo) === titleNeedle
+            : normalizeTitle(r.titulo).includes(titleNeedle)
+        );
+      if (!matchIsbn && !matchTitle) return;
 
       const code = String(r.codigo || "").trim();
       if (!code) return;
@@ -590,32 +601,41 @@
     if (els.btnClearIsbn) els.btnClearIsbn.hidden = true;
   }
 
-  function runIsbnSearch(rawQuery) {
-    state.isbnQuery = String(rawQuery || "").trim();
-    if (els.btnClearIsbn) els.btnClearIsbn.hidden = !state.isbnQuery;
+  function clearClientSelection() {
+    state.selectedClient = null;
+    state.stockByKey = new Map();
+    state.stockLookup = new Map();
+    state.mapaQuality = null;
+    if (els.clientMeta) els.clientMeta.textContent = "";
+    if (els.clientSelect) els.clientSelect.value = "";
+    if (els.clientQuery) {
+      state.clientQuery = "";
+      els.clientQuery.value = "";
+    }
+  }
 
-    if (!state.isbnQuery) {
+  function runProductSearch({ rawQuery = "", exactTitle = "", exactIsbn = "" } = {}) {
+    const q = String(rawQuery || exactTitle || exactIsbn || "").trim();
+    state.isbnQuery = q;
+    if (els.btnClearIsbn) els.btnClearIsbn.hidden = !q;
+    if (els.isbnQuery && exactIsbn) els.isbnQuery.value = exactIsbn;
+    else if (els.isbnQuery && q) els.isbnQuery.value = q;
+
+    if (!q) {
       state.isbnResult = null;
       render();
       return;
     }
 
-    // Busca por ISBN é secundária: sai da análise de cliente atual.
-    if (state.selectedClient) {
-      state.selectedClient = null;
-      state.stockByKey = new Map();
-      state.stockLookup = new Map();
-      state.mapaQuality = null;
-      if (els.clientMeta) els.clientMeta.textContent = "";
-      if (els.clientSelect) els.clientSelect.value = "";
-      if (els.clientQuery) {
-        state.clientQuery = "";
-        els.clientQuery.value = "";
-      }
-    }
+    if (state.selectedClient) clearClientSelection();
 
-    state.isbnResult = findClientsByIsbn(state.isbnQuery);
+    state.isbnSearchOpen = true;
+    state.isbnResult = findClientsByProduct({ rawQuery, exactTitle, exactIsbn });
     render();
+  }
+
+  function runIsbnSearch(rawQuery) {
+    runProductSearch({ rawQuery });
   }
 
   function renderIsbnResults() {
@@ -633,9 +653,10 @@
 
     if (els.isbnResultTitle) els.isbnResultTitle.textContent = title;
     if (els.isbnResultMeta) {
+      const label = isbnLabel ? `ISBN ${isbnLabel}` : "Título/ISBN";
       els.isbnResultMeta.textContent = clients.length
-        ? `ISBN ${isbnLabel} · ${clients.length.toLocaleString("pt-BR")} cliente(s) com estoque`
-        : `ISBN ${isbnLabel} · nenhum cliente com saldo consignado`;
+        ? `${label} · ${clients.length.toLocaleString("pt-BR")} cliente(s) com estoque`
+        : `${label} · nenhum cliente com saldo consignado`;
     }
     if (els.isbnSumClients) els.isbnSumClients.textContent = clients.length.toLocaleString("pt-BR");
     if (els.isbnSumVolume) els.isbnSumVolume.textContent = volume.toLocaleString("pt-BR");
@@ -1175,7 +1196,7 @@
 
     if (hasMapa) {
       els.emptyTitle.textContent = "Escolha um cliente";
-      els.emptyText.textContent = `Mapão importado com ${state.clients.length.toLocaleString("pt-BR")} cliente(s). Use a busca ou a lista acima para selecionar e carregar o cruzamento. Também pode usar Buscar por ISBN.`;
+      els.emptyText.textContent = `Mapão importado com ${state.clients.length.toLocaleString("pt-BR")} cliente(s). Escolha um cliente acima, ou busque por título/ISBN à direita para ver quem tem o item em estoque.`;
       els.topSub.textContent = state.seller
         ? `${state.seller} · selecione um cliente para analisar o estoque.`
         : "Selecione um cliente para analisar o estoque.";
@@ -1203,7 +1224,7 @@
     if (els.isbnSearchPanel) els.isbnSearchPanel.hidden = !state.isbnSearchOpen;
     if (els.btnToggleIsbnSearch) {
       els.btnToggleIsbnSearch.hidden = state.clients.length === 0;
-      els.btnToggleIsbnSearch.textContent = state.isbnSearchOpen ? "Ocultar busca por ISBN" : "Buscar por ISBN";
+      els.btnToggleIsbnSearch.textContent = state.isbnSearchOpen ? "Ocultar busca por título/ISBN" : "Buscar por título/ISBN";
     }
 
     if (els.emptyState) els.emptyState.hidden = hasClient || hasIsbnView;
@@ -1212,7 +1233,12 @@
     if (els.actions) els.actions.hidden = !hasClient;
     if (els.filters) els.filters.hidden = !hasClient;
     if (els.sideKpis) els.sideKpis.hidden = !hasClient;
-    if (els.q) els.q.disabled = !hasClient;
+    if (els.q) {
+      els.q.disabled = !(hasClient || state.clients.length > 0);
+      els.q.placeholder = hasClient
+        ? "Filtrar título, autor ou ISBN neste cliente"
+        : "Buscar título ou ISBN nos clientes";
+    }
 
     renderClientPicker();
     updateEmptyState();
@@ -1221,9 +1247,10 @@
 
     if (hasIsbnView && els.topSub) {
       const n = state.isbnResult.clients.length;
+      const label = state.isbnResult.titulo || state.isbnResult.isbn || state.isbnQuery;
       els.topSub.textContent = state.seller
-        ? `${state.seller} · ISBN ${state.isbnResult.isbn || state.isbnQuery}: ${n.toLocaleString("pt-BR")} cliente(s) com estoque`
-        : `ISBN ${state.isbnResult.isbn || state.isbnQuery}: ${n.toLocaleString("pt-BR")} cliente(s) com estoque`;
+        ? `${state.seller} · ${label}: ${n.toLocaleString("pt-BR")} cliente(s) com estoque`
+        : `${label}: ${n.toLocaleString("pt-BR")} cliente(s) com estoque`;
     }
 
     if (!hasClient) return;
@@ -1449,9 +1476,67 @@
     if (els.q) els.q.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
+  function mapaProductSuggestions(query) {
+    const q = String(query || "").trim().toLowerCase();
+    if (!q || !state.mapaRows.length) return [];
+
+    const titleQ = normalizeTitle(q);
+    const aliasSet = new Set(isbnAliases(q));
+    const normalized = normalizeIsbn(q);
+    if (normalized) aliasSet.add(normalized);
+    const qDigits = q.replace(/\D/g, "");
+    const byKey = new Map();
+
+    state.mapaRows.forEach((r) => {
+      const qty = parseIntSafe(r.consignado) || 0;
+      if (qty <= 0) return;
+
+      const matchIsbn = rowMatchesIsbn(r, aliasSet, qDigits);
+      const titleKey = normalizeTitle(r.titulo);
+      const matchTitle = titleQ && titleKey.includes(titleQ);
+      const blob = `${r.titulo || ""} ${r.isbn || ""} ${r.codbarra || ""}`.toLowerCase();
+      if (!matchIsbn && !matchTitle && !blob.includes(q)) return;
+
+      const isbn = [...isbnAliases(r.isbn), ...isbnAliases(r.codbarra)].find(isReliableIsbn)
+        || expandIsbnCandidate(r.isbn)
+        || expandIsbnCandidate(r.codbarra)
+        || "";
+      const key = isbn || titleKey || String(r.titulo || "").toLowerCase();
+      if (!key) return;
+
+      const prev = byKey.get(key) || {
+        titulo: r.titulo || "Sem título",
+        isbn,
+        volume: 0,
+        clients: new Set(),
+      };
+      if (!prev.titulo && r.titulo) prev.titulo = r.titulo;
+      if (!prev.isbn && isbn) prev.isbn = isbn;
+      prev.volume += qty;
+      const code = String(r.codigo || "").trim();
+      if (code) prev.clients.add(code);
+      byKey.set(key, prev);
+    });
+
+    return [...byKey.values()]
+      .map((item) => ({
+        titulo: item.titulo,
+        isbn: item.isbn,
+        volume: item.volume,
+        clientCount: item.clients.size,
+      }))
+      .sort((a, b) => b.volume - a.volume || String(a.titulo).localeCompare(String(b.titulo), "pt-BR"))
+      .slice(0, 20);
+  }
+
   function titleSuggestions(query) {
     const q = String(query || "").trim().toLowerCase();
-    if (!q || !state.selectedClient) return [];
+    if (!q) return [];
+
+    if (!state.selectedClient) {
+      if (!state.clients.length) return [];
+      return mapaProductSuggestions(query);
+    }
 
     const seen = new Set();
     const matches = [];
@@ -1477,20 +1562,43 @@
   function renderTitleResults(list) {
     if (!els.titleResults) return;
     const q = state.query.trim();
-    if (!q || !state.selectedClient) {
+    const crossClient = !state.selectedClient && state.clients.length > 0;
+    if (!q || (!state.selectedClient && !crossClient)) {
       setTitleResultsOpen(false);
       els.titleResults.innerHTML = "";
       return;
     }
 
     if (!list.length) {
-      els.titleResults.innerHTML = `<p class="title-results-empty">Nenhum título, autor ou ISBN com esse texto.</p>`;
+      els.titleResults.innerHTML = `<p class="title-results-empty">Nenhum título ou ISBN com esse texto.</p>`;
+      setTitleResultsOpen(true);
+      return;
+    }
+
+    if (crossClient) {
+      els.titleResults.innerHTML = `
+        <div class="title-results-head">${list.length.toLocaleString("pt-BR")} título(s) — clique para ver clientes com estoque</div>
+        ${list.map((item) => {
+          const meta = [
+            item.isbn || "",
+            `${item.clientCount.toLocaleString("pt-BR")} cliente(s)`,
+            `Saldo ${item.volume.toLocaleString("pt-BR")}`,
+          ].filter(Boolean).join(" · ");
+          return `
+            <button type="button" class="title-result" data-mode="clients" data-isbn="${escapeHtml(item.isbn || "")}" data-titulo="${escapeHtml(item.titulo || "")}" role="option">
+              <strong>${escapeHtml(item.titulo || "Sem título")}</strong>
+              <span>${escapeHtml(item.isbn || "Sem ISBN")}</span>
+              <small>${escapeHtml(meta)}</small>
+            </button>
+          `;
+        }).join("")}
+      `;
       setTitleResultsOpen(true);
       return;
     }
 
     els.titleResults.innerHTML = `
-      <div class="title-results-head">${list.length.toLocaleString("pt-BR")} sugestão(ões) — clique para filtrar</div>
+      <div class="title-results-head">${list.length.toLocaleString("pt-BR")} sugestão(ões) — clique para filtrar neste cliente</div>
       ${list.map((row) => {
         const saldo = row.stock?.consignado;
         const meta = [
@@ -1499,7 +1607,7 @@
           saldo == null ? "Sem saldo" : `Saldo ${saldo.toLocaleString("pt-BR")}`,
         ].filter(Boolean).join(" · ");
         return `
-          <button type="button" class="title-result" data-query="${escapeHtml(row.titulo || row.isbn || "")}" role="option">
+          <button type="button" class="title-result" data-mode="filter" data-query="${escapeHtml(row.titulo || row.isbn || "")}" role="option">
             <strong>${escapeHtml(row.titulo || "Sem título")}</strong>
             <span>${escapeHtml(row.autor || "—")}</span>
             <small>${escapeHtml(meta)}</small>
@@ -1513,19 +1621,58 @@
   els.q.addEventListener("input", (e) => {
     state.query = e.target.value;
     renderTitleResults(titleSuggestions(state.query));
-    render();
+
+    // Sem cliente: ISBN completo já lista os clientes; título só sugere na lista.
+    if (!state.selectedClient && state.clients.length) {
+      const digits = state.query.replace(/\D/g, "");
+      if (digits.length >= 10) {
+        runProductSearch({ exactIsbn: state.query });
+        return;
+      }
+      if (!state.query.trim() && state.isbnResult) {
+        clearIsbnSearch();
+      }
+    }
+
+    if (state.selectedClient) render();
   });
   els.q.addEventListener("focus", () => {
     if (state.query.trim()) renderTitleResults(titleSuggestions(state.query));
   });
   els.q.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") setTitleResultsOpen(false);
+    if (e.key === "Escape") {
+      setTitleResultsOpen(false);
+      return;
+    }
+    if (e.key !== "Enter") return;
+    if (state.selectedClient || !state.clients.length) return;
+    e.preventDefault();
+    const list = titleSuggestions(state.query);
+    if (!list.length) return;
+    const first = list[0];
+    runProductSearch({
+      exactTitle: first.titulo || "",
+      exactIsbn: first.isbn || "",
+      rawQuery: first.isbn || first.titulo || state.query,
+    });
+    setTitleResultsOpen(false);
   });
   if (els.titleResults) {
     els.titleResults.addEventListener("mousedown", (e) => e.preventDefault());
     els.titleResults.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-query]");
+      const btn = e.target.closest(".title-result");
       if (!btn) return;
+      if (btn.dataset.mode === "clients") {
+        if (els.q) els.q.value = btn.dataset.titulo || btn.dataset.isbn || "";
+        state.query = els.q?.value || "";
+        runProductSearch({
+          exactTitle: btn.dataset.titulo || "",
+          exactIsbn: btn.dataset.isbn || "",
+          rawQuery: btn.dataset.isbn || btn.dataset.titulo || "",
+        });
+        setTitleResultsOpen(false);
+        return;
+      }
       const value = btn.dataset.query || "";
       state.query = value;
       if (els.q) els.q.value = value;
