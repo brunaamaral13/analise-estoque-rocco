@@ -40,7 +40,13 @@
     clientMeta: document.getElementById("clientMeta"),
     btnToggleIsbnSearch: document.getElementById("btnToggleIsbnSearch"),
     isbnSearchPanel: document.getElementById("isbnSearchPanel"),
-    isbnQuery: document.getElementById("isbnQuery"),
+    isbnFieldQuery: document.getElementById("isbnFieldQuery"),
+    titleFieldQuery: document.getElementById("titleFieldQuery"),
+    isbnFieldResults: document.getElementById("isbnFieldResults"),
+    titleFieldResults: document.getElementById("titleFieldResults"),
+    isbnFieldWrap: document.getElementById("isbnFieldWrap"),
+    titleFieldWrap: document.getElementById("titleFieldWrap"),
+    productSelected: document.getElementById("productSelected"),
     btnClearIsbn: document.getElementById("btnClearIsbn"),
     isbnResults: document.getElementById("isbnResults"),
     isbnResultTitle: document.getElementById("isbnResultTitle"),
@@ -90,7 +96,9 @@
     selectedClient: null,
     clientQuery: "",
     isbnSearchOpen: false,
-    isbnQuery: "",
+    isbnFieldQuery: "",
+    titleFieldQuery: "",
+    selectedProducts: [],
     isbnResult: null,
     filter: "all",
     query: "",
@@ -594,11 +602,67 @@
     return { query: q, titulo, isbn, clients };
   }
 
+  function productKey(item) {
+    if (item?.isbn) return `isbn:${item.isbn}`;
+    if (item?.titulo) return `title:${normalizeTitle(item.titulo)}`;
+    return "";
+  }
+
+  function buildProductCatalog() {
+    const byKey = new Map();
+    state.mapaRows.forEach((r) => {
+      const qty = parseIntSafe(r.consignado) || 0;
+      if (qty <= 0) return;
+      const isbn = [...isbnAliases(r.isbn), ...isbnAliases(r.codbarra)].find(isReliableIsbn)
+        || expandIsbnCandidate(r.isbn)
+        || expandIsbnCandidate(r.codbarra)
+        || "";
+      const titulo = r.titulo || "Sem título";
+      const key = isbn ? `isbn:${isbn}` : `title:${normalizeTitle(titulo)}`;
+      if (!key || key === "title:") return;
+
+      const prev = byKey.get(key) || {
+        key,
+        isbn,
+        titulo,
+        volume: 0,
+        clients: new Set(),
+      };
+      if (!prev.isbn && isbn) prev.isbn = isbn;
+      if ((!prev.titulo || prev.titulo === "Sem título") && r.titulo) prev.titulo = r.titulo;
+      prev.volume += qty;
+      const code = String(r.codigo || "").trim();
+      if (code) prev.clients.add(code);
+      byKey.set(key, prev);
+    });
+
+    return [...byKey.values()]
+      .map((item) => ({
+        key: item.key,
+        isbn: item.isbn,
+        titulo: item.titulo,
+        volume: item.volume,
+        clientCount: item.clients.size,
+      }))
+      .sort((a, b) => b.volume - a.volume || String(a.titulo).localeCompare(String(b.titulo), "pt-BR"));
+  }
+
   function clearIsbnSearch() {
-    state.isbnQuery = "";
+    state.isbnFieldQuery = "";
+    state.titleFieldQuery = "";
+    state.selectedProducts = [];
     state.isbnResult = null;
-    if (els.isbnQuery) els.isbnQuery.value = "";
+    if (els.isbnFieldQuery) els.isbnFieldQuery.value = "";
+    if (els.titleFieldQuery) els.titleFieldQuery.value = "";
     if (els.btnClearIsbn) els.btnClearIsbn.hidden = true;
+    setProductResultsOpen("isbn", false);
+    setProductResultsOpen("title", false);
+    if (els.isbnFieldResults) els.isbnFieldResults.innerHTML = "";
+    if (els.titleFieldResults) els.titleFieldResults.innerHTML = "";
+    if (els.productSelected) {
+      els.productSelected.hidden = true;
+      els.productSelected.innerHTML = "";
+    }
   }
 
   function clearClientSelection() {
@@ -614,24 +678,220 @@
     }
   }
 
-  function runProductSearch({ rawQuery = "", exactTitle = "", exactIsbn = "" } = {}) {
-    const q = String(rawQuery || exactTitle || exactIsbn || "").trim();
-    state.isbnQuery = q;
-    if (els.btnClearIsbn) els.btnClearIsbn.hidden = !q;
-    if (els.isbnQuery && exactIsbn) els.isbnQuery.value = exactIsbn;
-    else if (els.isbnQuery && q) els.isbnQuery.value = q;
+  function findClientsBySelectedProducts(selected) {
+    if (!selected.length || !state.mapaRows.length) {
+      return { query: "", titulo: "", isbn: "", clients: [], selectedCount: 0 };
+    }
 
-    if (!q) {
+    const byClient = new Map();
+
+    state.mapaRows.forEach((r) => {
+      const selectedHit = selected.some((p) => {
+        if (p.isbn) {
+          const set = new Set(isbnAliases(p.isbn));
+          const normalized = normalizeIsbn(p.isbn);
+          if (normalized) set.add(normalized);
+          const digits = String(normalized || p.isbn).replace(/\D/g, "");
+          return rowMatchesIsbn(r, set, digits);
+        }
+        return normalizeTitle(r.titulo) === normalizeTitle(p.titulo);
+      });
+      if (!selectedHit) return;
+
+      const code = String(r.codigo || "").trim();
+      if (!code) return;
+
+      const qty = parseIntSafe(r.consignado) || 0;
+      const preco = parseNumber(r.preco);
+      const desconto = parseNumber(r.perdesconto) || 0;
+      const fator = Math.max(0, 1 - desconto / 100);
+      const valor = preco != null && qty ? preco * qty * fator : 0;
+      const fdias = parseIntSafe(r.fdias);
+      const vendido = parseIntSafe(r.vendido) || 0;
+
+      const prev = byClient.get(code) || {
+        codigo: code,
+        nome: r.nome || "Cliente sem nome",
+        cidade: r.cidade || "",
+        estado: r.estado || "",
+        consignado: 0,
+        valorLiquido: 0,
+        fdias: null,
+        vendido: 0,
+      };
+
+      prev.consignado += qty;
+      prev.valorLiquido += valor;
+      prev.vendido += vendido;
+      if (fdias != null) prev.fdias = prev.fdias == null ? fdias : Math.max(prev.fdias, fdias);
+      if (!prev.nome && r.nome) prev.nome = r.nome;
+      byClient.set(code, prev);
+    });
+
+    const clients = [...byClient.values()]
+      .filter((c) => (c.consignado || 0) > 0)
+      .sort((a, b) => (b.consignado || 0) - (a.consignado || 0));
+
+    return {
+      query: selected.map((p) => p.titulo || p.isbn).join(", "),
+      titulo: selected.length === 1 ? (selected[0].titulo || selected[0].isbn) : `${selected.length} itens selecionados`,
+      isbn: selected.length === 1 ? (selected[0].isbn || "") : "",
+      clients,
+      selectedCount: selected.length,
+    };
+  }
+
+  function refreshSelectedProductResults() {
+    if (els.btnClearIsbn) els.btnClearIsbn.hidden = state.selectedProducts.length === 0;
+    if (!state.selectedProducts.length) {
       state.isbnResult = null;
+      renderSelectedProductChips();
       render();
       return;
     }
-
     if (state.selectedClient) clearClientSelection();
-
     state.isbnSearchOpen = true;
-    state.isbnResult = findClientsByProduct({ rawQuery, exactTitle, exactIsbn });
+    state.isbnResult = findClientsBySelectedProducts(state.selectedProducts);
+    renderSelectedProductChips();
     render();
+  }
+
+  function toggleProductSelection(item) {
+    const key = item.key || productKey(item);
+    if (!key) return;
+    const idx = state.selectedProducts.findIndex((p) => p.key === key);
+    if (idx >= 0) {
+      state.selectedProducts.splice(idx, 1);
+    } else {
+      state.selectedProducts.push({
+        key,
+        isbn: item.isbn || "",
+        titulo: item.titulo || "",
+      });
+    }
+    refreshSelectedProductResults();
+  }
+
+  function isProductSelected(item) {
+    const key = item.key || productKey(item);
+    return state.selectedProducts.some((p) => p.key === key);
+  }
+
+  function renderSelectedProductChips() {
+    if (!els.productSelected) return;
+    if (!state.selectedProducts.length) {
+      els.productSelected.hidden = true;
+      els.productSelected.innerHTML = "";
+      return;
+    }
+    els.productSelected.hidden = false;
+    els.productSelected.innerHTML = state.selectedProducts.map((p) => {
+      const label = p.titulo || p.isbn || "Item";
+      const meta = p.isbn && p.titulo ? p.isbn : "";
+      return `
+        <button type="button" class="product-chip" data-key="${escapeHtml(p.key)}" title="Clique para remover">
+          ${escapeHtml(label)}${meta ? ` · ${escapeHtml(meta)}` : ""}
+          <span aria-hidden="true">×</span>
+        </button>
+      `;
+    }).join("");
+  }
+
+  function setProductResultsOpen(kind, open) {
+    const box = kind === "isbn" ? els.isbnFieldResults : els.titleFieldResults;
+    const input = kind === "isbn" ? els.isbnFieldQuery : els.titleFieldQuery;
+    const wrap = input?.closest(".isbn-search");
+    if (!box) return;
+    box.hidden = !open;
+    if (wrap) wrap.classList.toggle("is-open", open);
+    if (input) input.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function filterProductCatalog(kind, query) {
+    const q = String(query || "").trim().toLowerCase();
+    const catalog = buildProductCatalog();
+    if (!q) {
+      // Mostra selecionados + top itens para facilitar multi-seleção.
+      const selected = catalog.filter((item) => isProductSelected(item));
+      const rest = catalog.filter((item) => !isProductSelected(item)).slice(0, 12);
+      return [...selected, ...rest].slice(0, 20);
+    }
+
+    const titleQ = normalizeTitle(q);
+    const aliasSet = new Set(isbnAliases(q));
+    const normalized = normalizeIsbn(q);
+    if (normalized) aliasSet.add(normalized);
+    const qDigits = q.replace(/\D/g, "");
+
+    return catalog
+      .filter((item) => {
+        if (kind === "isbn") {
+          const blob = `${item.isbn || ""}`.toLowerCase();
+          if (blob.includes(qDigits) || blob.includes(q)) return true;
+          if (qDigits.length >= 8 && (item.isbn || "").includes(qDigits)) return true;
+          return [...aliasSet].some((a) => (item.isbn || "") === a);
+        }
+        const blob = `${item.titulo || ""}`.toLowerCase();
+        return blob.includes(q) || (titleQ && normalizeTitle(item.titulo).includes(titleQ));
+      })
+      .slice(0, 20);
+  }
+
+  function renderProductFieldResults(kind, list) {
+    const box = kind === "isbn" ? els.isbnFieldResults : els.titleFieldResults;
+    if (!box) return;
+    const q = kind === "isbn" ? state.isbnFieldQuery.trim() : state.titleFieldQuery.trim();
+
+    if (!list.length) {
+      box.innerHTML = `<p class="product-results-empty">Nenhuma opção encontrada.</p>`;
+      setProductResultsOpen(kind, Boolean(q) || state.selectedProducts.length > 0);
+      return;
+    }
+
+    box.innerHTML = `
+      <div class="product-results-head">Clique para selecionar ou tirar a seleção</div>
+      ${list.map((item) => {
+        const selected = isProductSelected(item);
+        const meta = [
+          item.isbn || "",
+          `${item.clientCount.toLocaleString("pt-BR")} cliente(s)`,
+          `Saldo ${item.volume.toLocaleString("pt-BR")}`,
+        ].filter(Boolean).join(" · ");
+        return `
+          <button type="button" class="product-result${selected ? " is-selected" : ""}" data-kind="${kind}" data-key="${escapeHtml(item.key)}" data-isbn="${escapeHtml(item.isbn || "")}" data-titulo="${escapeHtml(item.titulo || "")}" role="option" aria-selected="${selected}">
+            <strong>${escapeHtml(kind === "isbn" ? (item.isbn || item.titulo) : item.titulo)}</strong>
+            <span>${escapeHtml(kind === "isbn" ? (item.titulo || "—") : (item.isbn || "Sem ISBN"))}</span>
+            <small>${escapeHtml(meta)}</small>
+            <span class="pick-hint">${selected ? "Selecionado — clique para remover" : "Clique para selecionar"}</span>
+          </button>
+        `;
+      }).join("")}
+    `;
+    setProductResultsOpen(kind, true);
+  }
+
+  function runProductSearch({ rawQuery = "", exactTitle = "", exactIsbn = "" } = {}) {
+    // Compatibilidade: seleção única vinda da busca do topo.
+    const catalog = buildProductCatalog();
+    let item = null;
+    if (exactIsbn) {
+      item = catalog.find((p) => p.isbn && (p.isbn === normalizeIsbn(exactIsbn) || p.isbn === expandIsbnCandidate(exactIsbn) || isbnAliases(exactIsbn).includes(p.isbn)));
+    }
+    if (!item && exactTitle) {
+      const needle = normalizeTitle(exactTitle);
+      item = catalog.find((p) => normalizeTitle(p.titulo) === needle);
+    }
+    if (!item && rawQuery) {
+      const list = filterProductCatalog("title", rawQuery);
+      item = list[0] || filterProductCatalog("isbn", rawQuery)[0] || null;
+    }
+    if (!item) {
+      clearIsbnSearch();
+      render();
+      return;
+    }
+    if (!isProductSelected(item)) toggleProductSelection(item);
+    else refreshSelectedProductResults();
   }
 
   function runIsbnSearch(rawQuery) {
@@ -641,19 +901,21 @@
   function renderIsbnResults() {
     if (!els.isbnResults) return;
     const result = state.isbnResult;
-    const show = Boolean(result && state.isbnQuery && !state.selectedClient);
+    const show = Boolean(result && state.selectedProducts.length && !state.selectedClient);
     els.isbnResults.hidden = !show;
     if (!show) return;
 
     const clients = result.clients || [];
     const volume = clients.reduce((acc, c) => acc + (c.consignado || 0), 0);
     const valor = clients.reduce((acc, c) => acc + (c.valorLiquido || 0), 0);
-    const title = result.titulo || "ISBN encontrado no Mapão";
-    const isbnLabel = result.isbn || state.isbnQuery;
+    const title = result.titulo || "Itens selecionados";
+    const isbnLabel = result.isbn || "";
 
     if (els.isbnResultTitle) els.isbnResultTitle.textContent = title;
     if (els.isbnResultMeta) {
-      const label = isbnLabel ? `ISBN ${isbnLabel}` : "Título/ISBN";
+      const label = state.selectedProducts.length > 1
+        ? `${state.selectedProducts.length} itens`
+        : (isbnLabel ? `ISBN ${isbnLabel}` : "Título/ISBN");
       els.isbnResultMeta.textContent = clients.length
         ? `${label} · ${clients.length.toLocaleString("pt-BR")} cliente(s) com estoque`
         : `${label} · nenhum cliente com saldo consignado`;
@@ -666,7 +928,7 @@
       if (!clients.length) {
         els.isbnTbody.innerHTML = `
           <tr>
-            <td colspan="7">Nenhum cliente com este ISBN em estoque no Mapão importado.</td>
+            <td colspan="7">Nenhum cliente com os itens selecionados em estoque no Mapão importado.</td>
           </tr>
         `;
       } else {
@@ -1188,7 +1450,7 @@
 
   function updateEmptyState() {
     if (state.selectedClient) return;
-    if (state.isbnResult && state.isbnQuery) return;
+    if (state.isbnResult && state.selectedProducts.length) return;
 
     const hasMapa = state.clients.length > 0;
     if (els.btnImportMain) els.btnImportMain.hidden = hasMapa;
@@ -1219,7 +1481,7 @@
 
   function render() {
     const hasClient = Boolean(state.selectedClient);
-    const hasIsbnView = Boolean(state.isbnResult && state.isbnQuery && !hasClient);
+    const hasIsbnView = Boolean(state.isbnResult && state.selectedProducts.length && !hasClient);
 
     if (els.isbnSearchPanel) els.isbnSearchPanel.hidden = !state.isbnSearchOpen;
     if (els.btnToggleIsbnSearch) {
@@ -1243,11 +1505,12 @@
     renderClientPicker();
     updateEmptyState();
     updateActiveFilters();
+    renderSelectedProductChips();
     renderIsbnResults();
 
     if (hasIsbnView && els.topSub) {
       const n = state.isbnResult.clients.length;
-      const label = state.isbnResult.titulo || state.isbnResult.isbn || state.isbnQuery;
+      const label = state.isbnResult.titulo || state.isbnResult.isbn || "Itens selecionados";
       els.topSub.textContent = state.seller
         ? `${state.seller} · ${label}: ${n.toLocaleString("pt-BR")} cliente(s) com estoque`
         : `${label}: ${n.toLocaleString("pt-BR")} cliente(s) com estoque`;
@@ -1368,20 +1631,64 @@
       state.isbnSearchOpen = !state.isbnSearchOpen;
       if (!state.isbnSearchOpen) clearIsbnSearch();
       render();
-      if (state.isbnSearchOpen && els.isbnQuery) els.isbnQuery.focus();
+      if (state.isbnSearchOpen && els.isbnFieldQuery) els.isbnFieldQuery.focus();
     });
   }
 
-  if (els.isbnQuery) {
-    els.isbnQuery.addEventListener("input", (e) => {
-      runIsbnSearch(e.target.value);
+  function onProductFieldInput(kind, value) {
+    if (kind === "isbn") state.isbnFieldQuery = value;
+    else state.titleFieldQuery = value;
+    renderProductFieldResults(kind, filterProductCatalog(kind, value));
+  }
+
+  if (els.isbnFieldQuery) {
+    els.isbnFieldQuery.addEventListener("input", (e) => onProductFieldInput("isbn", e.target.value));
+    els.isbnFieldQuery.addEventListener("focus", () => {
+      renderProductFieldResults("isbn", filterProductCatalog("isbn", state.isbnFieldQuery));
     });
-    els.isbnQuery.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        clearIsbnSearch();
-        state.isbnSearchOpen = false;
-        render();
-      }
+    els.isbnFieldQuery.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") setProductResultsOpen("isbn", false);
+    });
+  }
+
+  if (els.titleFieldQuery) {
+    els.titleFieldQuery.addEventListener("input", (e) => onProductFieldInput("title", e.target.value));
+    els.titleFieldQuery.addEventListener("focus", () => {
+      renderProductFieldResults("title", filterProductCatalog("title", state.titleFieldQuery));
+    });
+    els.titleFieldQuery.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") setProductResultsOpen("title", false);
+    });
+  }
+
+  function bindProductResultsClicks(box) {
+    if (!box) return;
+    box.addEventListener("mousedown", (e) => e.preventDefault());
+    box.addEventListener("click", (e) => {
+      const btn = e.target.closest(".product-result");
+      if (!btn) return;
+      toggleProductSelection({
+        key: btn.dataset.key,
+        isbn: btn.dataset.isbn || "",
+        titulo: btn.dataset.titulo || "",
+      });
+      const kind = btn.dataset.kind === "isbn" ? "isbn" : "title";
+      const q = kind === "isbn" ? state.isbnFieldQuery : state.titleFieldQuery;
+      renderProductFieldResults(kind, filterProductCatalog(kind, q));
+    });
+  }
+  bindProductResultsClicks(els.isbnFieldResults);
+  bindProductResultsClicks(els.titleFieldResults);
+
+  if (els.productSelected) {
+    els.productSelected.addEventListener("click", (e) => {
+      const chip = e.target.closest("[data-key]");
+      if (!chip) return;
+      const key = chip.dataset.key;
+      state.selectedProducts = state.selectedProducts.filter((p) => p.key !== key);
+      refreshSelectedProductResults();
+      if (state.isbnFieldQuery) renderProductFieldResults("isbn", filterProductCatalog("isbn", state.isbnFieldQuery));
+      if (state.titleFieldQuery) renderProductFieldResults("title", filterProductCatalog("title", state.titleFieldQuery));
     });
   }
 
@@ -1389,9 +1696,14 @@
     els.btnClearIsbn.addEventListener("click", () => {
       clearIsbnSearch();
       render();
-      if (els.isbnQuery) els.isbnQuery.focus();
+      if (els.isbnFieldQuery) els.isbnFieldQuery.focus();
     });
   }
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#isbnFieldWrap")) setProductResultsOpen("isbn", false);
+    if (!e.target.closest("#titleFieldWrap")) setProductResultsOpen("title", false);
+  });
 
   if (els.isbnTbody) {
     els.isbnTbody.addEventListener("click", (e) => {

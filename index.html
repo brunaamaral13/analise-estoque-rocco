@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Outfit:wght@360;460;560;650&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260306t">
+  <link rel="stylesheet" href="styles.css?v=20260306u">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b5191a'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -101,13 +101,26 @@
           </label>
         </div>
         <div class="client-bar-secondary">
-          <button type="button" class="isbn-toggle" id="btnToggleIsbnSearch">Buscar por ISBN</button>
+          <button type="button" class="isbn-toggle" id="btnToggleIsbnSearch">Buscar por título/ISBN</button>
           <div class="isbn-search-panel" id="isbnSearchPanel" hidden>
-            <label class="isbn-search">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
-              <input id="isbnQuery" type="search" placeholder="Digite o título ou ISBN" autocomplete="off" aria-label="Pesquisar clientes por título ou ISBN">
-            </label>
-            <button type="button" class="isbn-clear" id="btnClearIsbn" hidden>Limpar busca ISBN</button>
+            <div class="product-search-grid">
+              <div class="product-search-field" id="isbnFieldWrap">
+                <label class="isbn-search">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+                  <input id="isbnFieldQuery" type="search" placeholder="Buscar só por ISBN" autocomplete="off" aria-label="Buscar por ISBN" aria-autocomplete="list" aria-controls="isbnFieldResults" aria-expanded="false">
+                </label>
+                <div class="product-results" id="isbnFieldResults" hidden role="listbox" aria-label="Sugestões de ISBN"></div>
+              </div>
+              <div class="product-search-field" id="titleFieldWrap">
+                <label class="isbn-search">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+                  <input id="titleFieldQuery" type="search" placeholder="Buscar só por título" autocomplete="off" aria-label="Buscar por título" aria-autocomplete="list" aria-controls="titleFieldResults" aria-expanded="false">
+                </label>
+                <div class="product-results" id="titleFieldResults" hidden role="listbox" aria-label="Sugestões de título"></div>
+              </div>
+              <button type="button" class="isbn-clear" id="btnClearIsbn" hidden>Limpar seleção</button>
+            </div>
+            <div class="product-selected" id="productSelected" hidden></div>
           </div>
         </div>
       </section>
@@ -282,6 +295,6 @@
     </main>
   </div>
 
-  <script src="app.js?v=20260306t"></script>
+  <script src="app.js?v=20260306u"></script>
 </body>
 </html>
