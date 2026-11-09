@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Outfit:wght@360;460;560;650&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260306u">
+  <link rel="stylesheet" href="styles.css?v=20260306v">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b5191a'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -151,13 +151,13 @@
           <table class="grid" id="isbnGrid">
             <thead>
               <tr>
-                <th>Código</th>
-                <th>Cliente</th>
-                <th>UF</th>
-                <th class="num">Saldo</th>
-                <th class="num">Valor líquido</th>
-                <th class="num">Dias sem giro</th>
-                <th class="num">Vendido</th>
+                <th class="sortable" data-sort="codigo" aria-sort="none"><button type="button">Código</button></th>
+                <th class="sortable" data-sort="cliente" aria-sort="none"><button type="button">Cliente</button></th>
+                <th class="sortable" data-sort="uf" aria-sort="none"><button type="button">UF</button></th>
+                <th class="num sortable" data-sort="saldo" aria-sort="descending"><button type="button">Saldo</button></th>
+                <th class="num sortable" data-sort="valor" aria-sort="none"><button type="button">Valor líquido</button></th>
+                <th class="num sortable" data-sort="fdias" aria-sort="none"><button type="button">Dias sem giro</button></th>
+                <th class="num sortable" data-sort="vendido" aria-sort="none"><button type="button">Vendido</button></th>
               </tr>
             </thead>
             <tbody id="isbnTbody"></tbody>
@@ -295,6 +295,6 @@
     </main>
   </div>
 
-  <script src="app.js?v=20260306u"></script>
+  <script src="app.js?v=20260306v"></script>
 </body>
 </html>

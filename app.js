@@ -54,6 +54,7 @@
     isbnSumClients: document.getElementById("isbnSumClients"),
     isbnSumVolume: document.getElementById("isbnSumVolume"),
     isbnSumValue: document.getElementById("isbnSumValue"),
+    isbnGrid: document.getElementById("isbnGrid"),
     isbnTbody: document.getElementById("isbnTbody"),
     sideKpis: document.getElementById("sideKpis"),
     kpiMatch: document.getElementById("kpiMatch"),
@@ -100,6 +101,8 @@
     titleFieldQuery: "",
     selectedProducts: [],
     isbnResult: null,
+    isbnSortKey: "saldo",
+    isbnSortDir: "desc",
     filter: "all",
     query: "",
     sortKey: "ranking",
@@ -898,6 +901,45 @@
     runProductSearch({ rawQuery });
   }
 
+  function isbnSortValue(client, key) {
+    const uf = [client.cidade, client.estado].filter(Boolean).join("/") || "";
+    switch (key) {
+      case "codigo": {
+        const n = Number(String(client.codigo || "").replace(/\D/g, ""));
+        return Number.isFinite(n) && String(client.codigo || "").replace(/\D/g, "") ? n : String(client.codigo || "");
+      }
+      case "cliente":
+        return String(client.nome || "");
+      case "uf":
+        return uf;
+      case "saldo":
+        return client.consignado || 0;
+      case "valor":
+        return client.valorLiquido || 0;
+      case "fdias":
+        return client.fdias == null ? -1 : client.fdias;
+      case "vendido":
+        return client.vendido || 0;
+      default:
+        return 0;
+    }
+  }
+
+  function compareIsbnClients(a, b) {
+    const av = isbnSortValue(a, state.isbnSortKey);
+    const bv = isbnSortValue(b, state.isbnSortKey);
+    let cmp = 0;
+    if (typeof av === "string" || typeof bv === "string") {
+      cmp = String(av).localeCompare(String(bv), "pt-BR", { numeric: true, sensitivity: "base" });
+    } else {
+      cmp = av === bv ? 0 : av < bv ? -1 : 1;
+    }
+    if (cmp === 0) {
+      cmp = String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
+    }
+    return state.isbnSortDir === "asc" ? cmp : -cmp;
+  }
+
   function renderIsbnResults() {
     if (!els.isbnResults) return;
     const result = state.isbnResult;
@@ -905,7 +947,7 @@
     els.isbnResults.hidden = !show;
     if (!show) return;
 
-    const clients = result.clients || [];
+    const clients = [...(result.clients || [])].sort(compareIsbnClients);
     const volume = clients.reduce((acc, c) => acc + (c.consignado || 0), 0);
     const valor = clients.reduce((acc, c) => acc + (c.valorLiquido || 0), 0);
     const title = result.titulo || "Itens selecionados";
@@ -923,6 +965,17 @@
     if (els.isbnSumClients) els.isbnSumClients.textContent = clients.length.toLocaleString("pt-BR");
     if (els.isbnSumVolume) els.isbnSumVolume.textContent = volume.toLocaleString("pt-BR");
     if (els.isbnSumValue) els.isbnSumValue.textContent = money(valor);
+
+    if (els.isbnGrid) {
+      els.isbnGrid.querySelectorAll("th.sortable").forEach((th) => {
+        const key = th.dataset.sort;
+        const active = key === state.isbnSortKey;
+        th.setAttribute("aria-sort", active ? (state.isbnSortDir === "asc" ? "ascending" : "descending") : "none");
+        th.classList.toggle("is-sorted", active);
+        th.classList.toggle("is-asc", active && state.isbnSortDir === "asc");
+        th.classList.toggle("is-desc", active && state.isbnSortDir === "desc");
+      });
+    }
 
     if (els.isbnTbody) {
       if (!clients.length) {
@@ -2063,6 +2116,23 @@
     }
     render();
   });
+
+  if (els.isbnGrid) {
+    els.isbnGrid.querySelector("thead").addEventListener("click", (e) => {
+      const th = e.target.closest("th.sortable");
+      if (!th) return;
+      const key = th.dataset.sort;
+      if (!key) return;
+
+      if (state.isbnSortKey === key) {
+        state.isbnSortDir = state.isbnSortDir === "asc" ? "desc" : "asc";
+      } else {
+        state.isbnSortKey = key;
+        state.isbnSortDir = key === "cliente" || key === "uf" || key === "codigo" ? "asc" : "desc";
+      }
+      renderIsbnResults();
+    });
+  }
 
   initSellerGate();
   loadRanking();
