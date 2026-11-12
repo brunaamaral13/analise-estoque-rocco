@@ -1726,6 +1726,17 @@
     return "";
   }
 
+  function hasClearableFilters() {
+    return Boolean(
+      state.selectedClient
+      || state.sellerFilter
+      || state.filter !== "all"
+      || state.query.trim()
+      || state.selectedQueries.length
+      || state.selectedProducts.length
+    );
+  }
+
   function updateActiveFilters() {
     const client = state.selectedClient;
     const filterLabel = FILTER_LABELS[state.filter] || state.filter;
@@ -1734,18 +1745,19 @@
     const searchLabel = selectedTitles.length
       ? selectedTitles.map((item) => item.titulo || item.isbn || item.query).filter(Boolean).join(", ")
       : search;
-    const hasTableFilter = state.filter !== "all" || Boolean(search) || selectedTitles.length > 0;
+    const canClear = hasClearableFilters();
 
     if (els.btnClearFilters) {
-      els.btnClearFilters.hidden = !client || !hasTableFilter;
+      els.btnClearFilters.hidden = !canClear;
     }
 
     if (els.sideActiveFilters) {
-      if (!client) {
+      if (!client && !state.sellerFilter) {
         els.sideActiveFilters.innerHTML = `<li>Nenhum cliente selecionado</li>`;
       } else {
         els.sideActiveFilters.innerHTML = `
-          <li><strong>Cliente</strong>${escapeHtml(client.codigo)} · ${escapeHtml(client.nome)}</li>
+          ${state.sellerFilter ? `<li><strong>Vendedor do Mapão</strong>${escapeHtml(state.sellerFilter)}</li>` : ""}
+          <li><strong>Cliente</strong>${client ? `${escapeHtml(client.codigo)} · ${escapeHtml(client.nome)}` : "Nenhum"}</li>
           <li><strong>Base</strong>Mais vendidos Rocco (Top 500)</li>
           <li><strong>Filtro da tabela</strong>${escapeHtml(filterLabel)}</li>
           <li><strong>Busca de título</strong>${searchLabel ? escapeHtml(searchLabel) : "Nenhuma"}</li>
@@ -1754,7 +1766,7 @@
     }
 
     if (els.mainActiveFilters) {
-      if (!client) {
+      if (!client && !state.sellerFilter && !canClear) {
         els.mainActiveFilters.hidden = true;
         els.mainActiveFilters.innerHTML = "";
         return;
@@ -1772,14 +1784,15 @@
           ? `<button type="button" class="filter-chip is-removable" data-clear="search" title="Remover busca"><em>Busca</em> ${escapeHtml(search)} <span class="chip-x" aria-hidden="true">×</span></button>`
           : "");
       els.mainActiveFilters.innerHTML = `
-        ${state.seller ? `<button type="button" class="filter-chip is-removable" data-clear="seller" title="Trocar vendedor"><em>Vendedor</em> ${escapeHtml(state.seller)} <span class="chip-x" aria-hidden="true">×</span></button>` : ""}
-        <button type="button" class="filter-chip is-removable" data-clear="client" title="Remover cliente"><em>Cliente</em> ${escapeHtml(client.codigo)} · ${escapeHtml(client.nome)} <span class="chip-x" aria-hidden="true">×</span></button>
+        ${state.seller ? `<button type="button" class="filter-chip is-removable" data-clear="seller" title="Trocar usuário"><em>Usuário</em> ${escapeHtml(state.seller)} <span class="chip-x" aria-hidden="true">×</span></button>` : ""}
+        ${state.sellerFilter ? `<button type="button" class="filter-chip is-removable" data-clear="seller-filter" title="Remover filtro de vendedor"><em>Vendedor Mapão</em> ${escapeHtml(state.sellerFilter)} <span class="chip-x" aria-hidden="true">×</span></button>` : ""}
+        ${client ? `<button type="button" class="filter-chip is-removable" data-clear="client" title="Remover cliente"><em>Cliente</em> ${escapeHtml(client.codigo)} · ${escapeHtml(client.nome)} <span class="chip-x" aria-hidden="true">×</span></button>` : ""}
         <span class="filter-chip"><em>Base</em> Mais vendidos</span>
         ${hasActiveFilter
           ? `<button type="button" class="filter-chip is-removable ${tone}" data-clear="filter" title="Remover filtro"><em>Filtro</em> ${escapeHtml(filterLabel)} <span class="chip-x" aria-hidden="true">×</span></button>`
           : `<span class="filter-chip ${tone}"><em>Filtro</em> ${escapeHtml(filterLabel)}</span>`}
         ${searchChips}
-        <button type="button" class="clear-filters-main" id="btnClearFiltersMain"${hasTableFilter ? "" : " disabled"}>Limpar filtros</button>
+        <button type="button" class="clear-filters-main" id="btnClearFiltersMain"${canClear ? "" : " disabled"}>Limpar filtros</button>
       `;
     }
   }
@@ -1812,6 +1825,10 @@
   function clearTableFilters() {
     state.filter = "all";
     clearSelectedQueries();
+    clearIsbnSearch();
+    state.sellerFilter = "";
+    if (els.sellerFilter) els.sellerFilter.value = "";
+    clearClientSelection();
     syncFilterActiveState();
     render();
   }
@@ -2586,6 +2603,15 @@
         clearIsbnSearch();
         clearSelectedQueries();
         selectClient("");
+        return;
+      }
+      if (action === "seller-filter") {
+        state.sellerFilter = "";
+        if (els.sellerFilter) els.sellerFilter.value = "";
+        if (state.selectedProducts.length) {
+          state.isbnResult = findClientsBySelectedProducts(state.selectedProducts);
+        }
+        render();
         return;
       }
       if (action === "seller") {
