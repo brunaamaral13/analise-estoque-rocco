@@ -288,9 +288,7 @@
     const sampleText = quality?.samples?.length
       ? ` Exemplos: ${quality.samples.join(", ")}.`
       : "";
-    const formatHint = quality?.sourceFormat === "csv"
-      ? " Este arquivo foi lido como CSV — salve/importe o .xlsx do Excel."
-      : " O Excel deste arquivo ainda tem ISBN salvo como notação científica; use =TEXTO(célula;\"0\") numa coluna nova, cole valores e importe de novo.";
+    const formatHint = " No Excel, use =TEXTO(célula;\"0\") nas colunas isbn e codbarra, cole como valores e salve em .xlsx antes de importar.";
 
     const sideText = show
       ? `<strong>ISBN corrompido no arquivo</strong>${quality.sciNotation.toLocaleString("pt-BR")} linhas (${pctSci}%) com notação científica (ex.: 9,78656E+12).${sampleText}${formatHint}`
@@ -492,7 +490,7 @@
 
   function parseExcelBuffer(buffer) {
     if (typeof XLSX === "undefined") {
-      throw new Error("Biblioteca de Excel não carregou. Verifique a internet ou use CSV.");
+      throw new Error("Biblioteca de Excel não carregou. Verifique a internet e tente de novo.");
     }
     const workbook = XLSX.read(buffer, {
       type: "array",
@@ -545,10 +543,7 @@
         sourceFormat: excelKind || "excel",
       };
     }
-    return {
-      rows: parseCsv(decodeCsvBuffer(buffer)),
-      sourceFormat: "csv",
-    };
+    throw new Error("Envie o Mapão em Excel (.xlsx ou .xls).");
   }
 
   function scoreText(text) {
@@ -1872,7 +1867,7 @@
         : "Selecione um cliente para analisar o estoque.";
     } else {
       els.emptyTitle.textContent = "Pronto para o cruzamento";
-      els.emptyText.textContent = "Importe o Mapão (.xlsx ou CSV) para cruzar o estoque do cliente com os mais vendidos Rocco.";
+      els.emptyText.textContent = "Importe o Mapão em Excel (.xlsx ou .xls) para cruzar o estoque do cliente com os mais vendidos Rocco.";
       els.topSub.textContent = state.seller
         ? `${state.seller} · importe o Mapão do cliente para ver o saldo ao lado do ranking Rocco.`
         : "Importe o Mapão do cliente para ver o saldo ao lado do ranking Rocco.";
@@ -2033,8 +2028,7 @@
     els.clientQuery.value = "";
     els.clientMeta.textContent = "";
 
-    const formatLabel = parsed.sourceFormat === "csv" ? "CSV" : "Excel";
-    const baseMeta = `${file.name} · ${formatLabel} · ${rows.length.toLocaleString("pt-BR")} linhas · ${state.clients.length} cliente(s) · ISBN ok ${quality.reliable.toLocaleString("pt-BR")}`;
+    const baseMeta = `${file.name} · Excel · ${rows.length.toLocaleString("pt-BR")} linhas · ${state.clients.length} cliente(s) · ISBN ok ${quality.reliable.toLocaleString("pt-BR")}`;
     if (quality.sciNotation > 0) {
       const pct = Math.round((quality.sciNotation / Math.max(quality.total, 1)) * 100);
       els.mapaMeta.textContent = `${baseMeta} · aviso: ${quality.sciNotation.toLocaleString("pt-BR")} ISBN(s) em notação científica (${pct}%)`;
@@ -2153,7 +2147,7 @@
       console.error(err);
       els.mapaMeta.textContent = err?.message
         ? `Falha ao ler o Mapão: ${err.message}`
-        : "Falha ao ler o Mapão (.xlsx ou CSV).";
+        : "Falha ao ler o Mapão Excel (.xlsx ou .xls).";
     }
   });
 
