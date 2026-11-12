@@ -235,17 +235,18 @@
   function looksLikeExcelSciIsbn(value) {
     const raw = String(value || "").trim();
     if (!raw) return false;
+    // Só notação científica explícita (o Excel grava assim no CSV).
     if (/[eE][+-]?\d+/.test(raw)) return true;
-    const expanded = expandIsbnCandidate(raw);
-    return Boolean(expanded) && expanded.length === 13 && /0{4,}$/.test(expanded);
+    return false;
   }
 
-  function assessMapaIsbnQuality(rows) {
+  function assessMapaIsbnQuality(rows, sourceFormat = "") {
     let total = 0;
     let sciNotation = 0;
     let unreliable = 0;
     let reliable = 0;
     let empty = 0;
+    const samples = [];
 
     rows.forEach((r) => {
       total += 1;
@@ -257,7 +258,10 @@
         return;
       }
       const sci = looksLikeExcelSciIsbn(isbnRaw) || looksLikeExcelSciIsbn(barraRaw);
-      if (sci) sciNotation += 1;
+      if (sci) {
+        sciNotation += 1;
+        if (samples.length < 3) samples.push(isbnRaw || barraRaw);
+      }
       if (reliableRowIsbn(r)) reliable += 1;
       else unreliable += 1;
     });
@@ -268,7 +272,10 @@
       unreliable,
       reliable,
       empty,
-      hasProblem: sciNotation > 0 || unreliable > total * 0.05,
+      samples,
+      sourceFormat,
+      // Alerta forte só com notação científica real.
+      hasProblem: sciNotation > 0,
     };
   }
 
@@ -278,15 +285,18 @@
     const pctSci = quality && quality.total
       ? Math.round((quality.sciNotation / quality.total) * 100)
       : 0;
-    const pctBad = quality && quality.total
-      ? Math.round((quality.unreliable / quality.total) * 100)
-      : 0;
+    const sampleText = quality?.samples?.length
+      ? ` Exemplos: ${quality.samples.join(", ")}.`
+      : "";
+    const formatHint = quality?.sourceFormat === "csv"
+      ? " Este arquivo foi lido como CSV — salve/importe o .xlsx do Excel."
+      : " O Excel deste arquivo ainda tem ISBN salvo como notação científica; use =TEXTO(célula;\"0\") numa coluna nova, cole valores e importe de novo.";
 
     const sideText = show
-      ? `<strong>ISBN corrompido no arquivo</strong>${quality.sciNotation.toLocaleString("pt-BR")} linhas (${pctSci}%) vieram em notação científica (ex.: 9,78656E+12). Prefira importar o .xlsx do Excel em vez do CSV.`
+      ? `<strong>ISBN corrompido no arquivo</strong>${quality.sciNotation.toLocaleString("pt-BR")} linhas (${pctSci}%) com notação científica (ex.: 9,78656E+12).${sampleText}${formatHint}`
       : "";
     const bannerText = show
-      ? `<strong>Atenção: ISBN inválido no arquivo importado</strong>${quality.sciNotation.toLocaleString("pt-BR")} de ${quality.total.toLocaleString("pt-BR")} linhas (${pctSci}%) estão com ISBN em notação científica; ${quality.unreliable.toLocaleString("pt-BR")} (${pctBad}%) sem ISBN confiável. Importe o arquivo .xlsx original do Excel — salvar como CSV costuma quebrar o ISBN mesmo com a coluna em Texto.`
+      ? `<strong>Atenção: ISBN inválido no arquivo importado</strong>${quality.sciNotation.toLocaleString("pt-BR")} de ${quality.total.toLocaleString("pt-BR")} linhas (${pctSci}%) estão com ISBN em notação científica.${sampleText}${formatHint}`
       : "";
 
     if (els.mapaIsbnWarn) {
@@ -453,34 +463,74 @@
     return matrixToObjects(rows);
   }
 
+  function detectExcelKind(buffer) {
+    const u8 = new Uint8Array(buffer);
+    if (u8.length >= 2 && u8[0] === 0x50 && u8[1] === 0x4B) return "xlsx"; // ZIP / xlsx
+    if (u8.length >= 4 && u8[0] === 0xD0 && u8[1] === 0xCF && u8[2] === 0x11 && u8[3] === 0xE0) {
+      return "xls"; // OLE compound / xls
+    }
+    return null;
+  }
+
+  function readExcelCell(cell, headerName) {
+    if (!cell) return "";
+    // Número real do Excel: converte com todos os dígitos (evita 9.78e+12).
+    if (cell.t === "n" && typeof cell.v === "number" && Number.isFinite(cell.v)) {
+      return excelValueToString(cell.v, headerName);
+    }
+    // Texto formatado sem notação científica tem prioridade.
+    if (cell.w && !/[eE][+-]?\d+/.test(String(cell.w))) {
+      return String(cell.w).trim();
+    }
+    if (typeof cell.v === "number" && Number.isFinite(cell.v)) {
+      return excelValueToString(cell.v, headerName);
+    }
+    if (cell.v != null && cell.v !== "") return String(cell.v).trim();
+    if (cell.w != null && cell.w !== "") return String(cell.w).trim();
+    return "";
+  }
+
   function parseExcelBuffer(buffer) {
     if (typeof XLSX === "undefined") {
       throw new Error("Biblioteca de Excel não carregou. Verifique a internet ou use CSV.");
     }
-    const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
+    const workbook = XLSX.read(buffer, {
+      type: "array",
+      cellDates: false,
+      cellNF: false,
+      cellText: true,
+    });
     const sheetName = workbook.SheetNames[0];
     if (!sheetName) return [];
     const sheet = workbook.Sheets[sheetName];
-    const matrix = XLSX.utils.sheet_to_json(sheet, {
-      header: 1,
-      raw: true,
-      defval: "",
-      blankrows: false,
-    });
-    if (!matrix.length) return [];
-    const headers = matrix[0].map((h) => String(h || "").trim().toLowerCase());
-    return matrix.slice(1)
-      .filter((r) => r.some((c) => String(c ?? "").trim() !== ""))
-      .map((r) => {
-        const obj = {};
-        headers.forEach((h, idx) => {
-          obj[h] = excelValueToString(r[idx], h);
-        });
-        return obj;
+    if (!sheet || !sheet["!ref"]) return [];
+
+    const range = XLSX.utils.decode_range(sheet["!ref"]);
+    const headers = [];
+    for (let c = range.s.c; c <= range.e.c; c += 1) {
+      const addr = XLSX.utils.encode_cell({ r: range.s.r, c });
+      headers.push(String(readExcelCell(sheet[addr], "") || "").trim().toLowerCase());
+    }
+
+    const objects = [];
+    for (let r = range.s.r + 1; r <= range.e.r; r += 1) {
+      const obj = {};
+      let empty = true;
+      headers.forEach((h, idx) => {
+        if (!h) return;
+        const c = range.s.c + idx;
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const value = readExcelCell(sheet[addr], h);
+        obj[h] = value;
+        if (String(value).trim() !== "") empty = false;
       });
+      if (!empty) objects.push(obj);
+    }
+    return objects;
   }
 
-  function isExcelMapaFile(file) {
+  function isExcelMapaFile(file, buffer) {
+    if (buffer && detectExcelKind(buffer)) return true;
     const name = String(file?.name || "").toLowerCase();
     return name.endsWith(".xlsx") || name.endsWith(".xls")
       || /spreadsheetml|ms-excel|excel/.test(String(file?.type || "").toLowerCase());
@@ -488,9 +538,17 @@
 
   async function parseMapaFile(file) {
     const buffer = await file.arrayBuffer();
-    if (isExcelMapaFile(file)) return parseExcelBuffer(buffer);
-    const text = decodeCsvBuffer(buffer);
-    return parseCsv(text);
+    const excelKind = detectExcelKind(buffer);
+    if (excelKind || isExcelMapaFile(file, buffer)) {
+      return {
+        rows: parseExcelBuffer(buffer),
+        sourceFormat: excelKind || "excel",
+      };
+    }
+    return {
+      rows: parseCsv(decodeCsvBuffer(buffer)),
+      sourceFormat: "csv",
+    };
   }
 
   function scoreText(text) {
@@ -1958,8 +2016,9 @@
   }
 
   async function onMapaFile(file) {
-    const rows = await parseMapaFile(file);
-    const quality = assessMapaIsbnQuality(rows);
+    const parsed = await parseMapaFile(file);
+    const rows = parsed.rows;
+    const quality = assessMapaIsbnQuality(rows, parsed.sourceFormat);
 
     state.mapaRows = rows;
     state.clients = listClients(rows);
@@ -1974,13 +2033,11 @@
     els.clientQuery.value = "";
     els.clientMeta.textContent = "";
 
-    const baseMeta = `${file.name} · ${rows.length.toLocaleString("pt-BR")} linhas · ${state.clients.length} cliente(s)`;
+    const formatLabel = parsed.sourceFormat === "csv" ? "CSV" : "Excel";
+    const baseMeta = `${file.name} · ${formatLabel} · ${rows.length.toLocaleString("pt-BR")} linhas · ${state.clients.length} cliente(s) · ISBN ok ${quality.reliable.toLocaleString("pt-BR")}`;
     if (quality.sciNotation > 0) {
       const pct = Math.round((quality.sciNotation / Math.max(quality.total, 1)) * 100);
       els.mapaMeta.textContent = `${baseMeta} · aviso: ${quality.sciNotation.toLocaleString("pt-BR")} ISBN(s) em notação científica (${pct}%)`;
-    } else if (quality.unreliable > 0) {
-      const pct = Math.round((quality.unreliable / Math.max(quality.total, 1)) * 100);
-      els.mapaMeta.textContent = `${baseMeta} · aviso: ${quality.unreliable.toLocaleString("pt-BR")} linha(s) sem ISBN confiável (${pct}%)`;
     } else {
       els.mapaMeta.textContent = baseMeta;
     }
