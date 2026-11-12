@@ -217,8 +217,14 @@
       const n = Number(raw.replace(/\./g, "").replace(",", "."));
       if (!Number.isFinite(n) || n <= 0) return "";
       raw = String(Math.round(n));
+      // Excel em notação científica perde dígitos (ex.: 9,78656E+12 → 9786560000000).
+      if (raw.length >= 12 && /0{4,}$/.test(raw)) return "";
     }
     return raw.replace(/[^0-9Xx]/g, "").toUpperCase();
+  }
+
+  function reliableRowIsbn(row) {
+    return [...isbnAliases(row?.isbn), ...isbnAliases(row?.codbarra)].find(isReliableIsbn) || "";
   }
 
   function isbn10To13(isbn10) {
@@ -606,43 +612,79 @@
   }
 
   function productKey(item) {
-    if (item?.isbn) return `isbn:${item.isbn}`;
+    const isbn = item?.isbn && isReliableIsbn(item.isbn) ? item.isbn : "";
+    if (isbn) return `isbn:${isbn}`;
+    if (item?.codlivro) return `cod:${String(item.codlivro).trim()}`;
     if (item?.titulo) return `title:${normalizeTitle(item.titulo)}`;
     return "";
   }
 
   function buildProductCatalog() {
     const byKey = new Map();
+    const index = new Map();
+
+    function resolveKey(ids) {
+      for (const id of ids) {
+        if (id && index.has(id)) return index.get(id);
+      }
+      return null;
+    }
+
+    function registerIds(primaryKey, ids) {
+      ids.forEach((id) => {
+        if (id) index.set(id, primaryKey);
+      });
+    }
+
     state.mapaRows.forEach((r) => {
       const qty = parseIntSafe(r.consignado) || 0;
       if (qty <= 0) return;
-      const isbn = [...isbnAliases(r.isbn), ...isbnAliases(r.codbarra)].find(isReliableIsbn)
-        || expandIsbnCandidate(r.isbn)
-        || expandIsbnCandidate(r.codbarra)
-        || "";
+
+      const isbn = reliableRowIsbn(r);
+      const codlivro = String(r.codlivro || "").trim();
       const titulo = r.titulo || "Sem título";
-      const key = isbn ? `isbn:${isbn}` : `title:${normalizeTitle(titulo)}`;
-      if (!key || key === "title:") return;
+      const titleKey = normalizeTitle(titulo);
+      // Cruzar ISBN confiável + codlivro (Excel costuma corromper ISBN em notação científica).
+      // Título só entra como identidade quando não há ISBN nem código do livro.
+      const ids = [
+        isbn ? `isbn:${isbn}` : "",
+        codlivro ? `cod:${codlivro}` : "",
+      ].filter(Boolean);
+      if (!ids.length && titleKey) ids.push(`title:${titleKey}`);
+      if (!ids.length) return;
+
+      let key = resolveKey(ids);
+      if (!key) {
+        key = isbn ? `isbn:${isbn}` : (codlivro ? `cod:${codlivro}` : `title:${titleKey}`);
+      }
 
       const prev = byKey.get(key) || {
         key,
-        isbn,
+        isbn: isbn || "",
+        codlivro: codlivro || "",
         titulo,
+        titleKey,
         volume: 0,
         clients: new Set(),
       };
-      if (!prev.isbn && isbn) prev.isbn = isbn;
-      if ((!prev.titulo || prev.titulo === "Sem título") && r.titulo) prev.titulo = r.titulo;
+      if (isbn) prev.isbn = isbn;
+      if (codlivro) prev.codlivro = codlivro;
+      if ((!prev.titulo || prev.titulo === "Sem título") && r.titulo) {
+        prev.titulo = r.titulo;
+        prev.titleKey = titleKey;
+      }
       prev.volume += qty;
       const code = String(r.codigo || "").trim();
       if (code) prev.clients.add(code);
       byKey.set(key, prev);
+      registerIds(key, ids);
     });
 
     return [...byKey.values()]
       .map((item) => ({
         key: item.key,
         isbn: item.isbn,
+        codlivro: item.codlivro,
         titulo: item.titulo,
         volume: item.volume,
         clientCount: item.clients.size,
@@ -681,6 +723,27 @@
     }
   }
 
+  function productMatchesRow(product, row) {
+    if (!product || !row) return false;
+
+    if (product.isbn) {
+      const set = new Set(isbnAliases(product.isbn));
+      const normalized = normalizeIsbn(product.isbn);
+      if (normalized) set.add(normalized);
+      const digits = String(normalized || product.isbn).replace(/\D/g, "");
+      if (rowMatchesIsbn(row, set, digits)) return true;
+    }
+
+    const productCod = String(product.codlivro || "").trim();
+    const rowCod = String(row.codlivro || "").trim();
+    if (productCod && rowCod && productCod === rowCod) return true;
+
+    const productTitle = normalizeTitle(product.titulo || "");
+    if (productTitle && normalizeTitle(row.titulo) === productTitle) return true;
+
+    return false;
+  }
+
   function findClientsBySelectedProducts(selected) {
     if (!selected.length || !state.mapaRows.length) {
       return { query: "", titulo: "", isbn: "", clients: [], selectedCount: 0 };
@@ -689,16 +752,7 @@
     const byClient = new Map();
 
     state.mapaRows.forEach((r) => {
-      const selectedHit = selected.some((p) => {
-        if (p.isbn) {
-          const set = new Set(isbnAliases(p.isbn));
-          const normalized = normalizeIsbn(p.isbn);
-          if (normalized) set.add(normalized);
-          const digits = String(normalized || p.isbn).replace(/\D/g, "");
-          return rowMatchesIsbn(r, set, digits);
-        }
-        return normalizeTitle(r.titulo) === normalizeTitle(p.titulo);
-      });
+      const selectedHit = selected.some((p) => productMatchesRow(p, r));
       if (!selectedHit) return;
 
       const code = String(r.codigo || "").trim();
@@ -769,6 +823,7 @@
       state.selectedProducts.push({
         key,
         isbn: item.isbn || "",
+        codlivro: item.codlivro || "",
         titulo: item.titulo || "",
       });
     }
