@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Outfit:wght@360;460;560;650&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260306w">
+  <link rel="stylesheet" href="styles.css?v=20260306x">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b5191a'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -175,9 +175,10 @@
         <div class="title-search-wrap">
           <label class="search">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
-            <input id="q" type="search" placeholder="Buscar título ou ISBN" autocomplete="off" disabled aria-autocomplete="list" aria-controls="titleResults" aria-expanded="false">
+            <input id="q" type="search" placeholder="Buscar e selecionar títulos" autocomplete="off" disabled aria-autocomplete="list" aria-controls="titleResults" aria-expanded="false">
           </label>
           <div class="title-results" id="titleResults" hidden role="listbox" aria-label="Sugestões de títulos"></div>
+          <div class="title-selected" id="titleSelected" hidden></div>
         </div>
       </header>
 
@@ -295,6 +296,6 @@
     </main>
   </div>
 
-  <script src="app.js?v=20260306w"></script>
+  <script src="app.js?v=20260306x"></script>
 </body>
 </html>

@@ -707,6 +707,32 @@ h1, h2, p { margin: 0; }
   position: relative;
   min-width: min(320px, 100%);
   z-index: 35;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.title-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 360px;
+  justify-content: flex-end;
+}
+.title-selected .product-chip {
+  max-width: 100%;
+}
+.title-selected .product-chip span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.title-result.is-selected {
+  background: #fdecee;
+}
+.title-result .pick-hint {
+  font-size: 11px;
+  color: var(--red);
+  font-weight: 560;
 }
 .search {
   display: flex;

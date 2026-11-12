@@ -67,6 +67,7 @@
     btnClearFilters: document.getElementById("btnClearFilters"),
     q: document.getElementById("q"),
     titleResults: document.getElementById("titleResults"),
+    titleSelected: document.getElementById("titleSelected"),
     summary: document.getElementById("summary"),
     sumIsbns: document.getElementById("sumIsbns"),
     sumVolume: document.getElementById("sumVolume"),
@@ -105,6 +106,7 @@
     isbnSortDir: "desc",
     filter: "all",
     query: "",
+    selectedQueries: [],
     sortKey: "ranking",
     sortDir: "asc",
     mapaQuality: null,
@@ -1214,7 +1216,80 @@
     return state.sortDir === "asc" ? cmp : -cmp;
   }
 
+  function titleQueryKey(item) {
+    const isbn = item?.isbn && isReliableIsbn(item.isbn) ? item.isbn : "";
+    if (isbn) return `isbn:${isbn}`;
+    const title = normalizeTitle(item?.titulo || item?.query || "");
+    if (title) return `title:${title}`;
+    return "";
+  }
+
+  function rowMatchesSelectedQuery(row, item) {
+    if (!row || !item) return false;
+    if (item.isbn) {
+      const aliases = new Set(isbnAliases(item.isbn));
+      if (row.isbn && (aliases.has(row.isbn) || row.isbn === item.isbn)) return true;
+    }
+    const title = normalizeTitle(item.titulo || "");
+    if (title && normalizeTitle(row.titulo) === title) return true;
+    if (item.query) {
+      const blob = `${row.titulo} ${row.autor} ${row.isbn}`.toLowerCase();
+      return blob.includes(String(item.query).toLowerCase());
+    }
+    return false;
+  }
+
+  function isTitleQuerySelected(item) {
+    const key = item?.key || titleQueryKey(item);
+    return Boolean(key) && state.selectedQueries.some((q) => q.key === key);
+  }
+
+  function toggleTitleQuerySelection(item) {
+    const key = item?.key || titleQueryKey(item);
+    if (!key) return;
+    const idx = state.selectedQueries.findIndex((q) => q.key === key);
+    if (idx >= 0) {
+      state.selectedQueries.splice(idx, 1);
+    } else {
+      state.selectedQueries.push({
+        key,
+        isbn: item.isbn || "",
+        titulo: item.titulo || item.query || "",
+        query: item.query || item.titulo || item.isbn || "",
+      });
+    }
+  }
+
+  function clearSelectedQueries() {
+    state.selectedQueries = [];
+    state.query = "";
+    if (els.q) els.q.value = "";
+    setTitleResultsOpen(false);
+    if (els.titleResults) els.titleResults.innerHTML = "";
+    renderSelectedTitleChips();
+  }
+
+  function renderSelectedTitleChips() {
+    if (!els.titleSelected) return;
+    if (!state.selectedQueries.length) {
+      els.titleSelected.hidden = true;
+      els.titleSelected.innerHTML = "";
+      return;
+    }
+    els.titleSelected.hidden = false;
+    els.titleSelected.innerHTML = state.selectedQueries.map((item) => {
+      const label = item.titulo || item.isbn || item.query || "Título";
+      return `
+        <button type="button" class="product-chip" data-key="${escapeHtml(item.key)}" title="Clique para remover">
+          <span>${escapeHtml(label)}</span>
+          <span aria-hidden="true">×</span>
+        </button>
+      `;
+    }).join("");
+  }
+
   function rowsForRender() {
+    const selected = state.selectedQueries;
     const q = state.query.trim().toLowerCase();
 
     return buildAllRows()
@@ -1239,6 +1314,9 @@
         if (state.filter === "parado180") {
           if ((row.stock?.consignado || 0) <= 0) return false;
           if ((row.stock?.fdias || 0) < IDLE_DAYS_LONG) return false;
+        }
+        if (selected.length) {
+          return selected.some((item) => rowMatchesSelectedQuery(row, item));
         }
         if (!q) return true;
         const blob = `${row.titulo} ${row.autor} ${row.isbn}`.toLowerCase();
@@ -1411,7 +1489,11 @@
     const client = state.selectedClient;
     const filterLabel = FILTER_LABELS[state.filter] || state.filter;
     const search = state.query.trim();
-    const hasTableFilter = state.filter !== "all" || Boolean(search);
+    const selectedTitles = state.selectedQueries;
+    const searchLabel = selectedTitles.length
+      ? selectedTitles.map((item) => item.titulo || item.isbn || item.query).filter(Boolean).join(", ")
+      : search;
+    const hasTableFilter = state.filter !== "all" || Boolean(search) || selectedTitles.length > 0;
 
     if (els.btnClearFilters) {
       els.btnClearFilters.hidden = !client || !hasTableFilter;
@@ -1425,7 +1507,7 @@
           <li><strong>Cliente</strong>${escapeHtml(client.codigo)} · ${escapeHtml(client.nome)}</li>
           <li><strong>Base</strong>Mais vendidos Rocco (Top 500)</li>
           <li><strong>Filtro da tabela</strong>${escapeHtml(filterLabel)}</li>
-          <li><strong>Busca de título</strong>${search ? escapeHtml(search) : "Nenhuma"}</li>
+          <li><strong>Busca de título</strong>${searchLabel ? escapeHtml(searchLabel) : "Nenhuma"}</li>
         `;
       }
     }
@@ -1440,6 +1522,14 @@
       els.mainActiveFilters.hidden = false;
       const tone = filterTone(state.filter);
       const hasActiveFilter = state.filter !== "all";
+      const searchChips = selectedTitles.length
+        ? selectedTitles.map((item) => {
+          const label = item.titulo || item.isbn || item.query || "Título";
+          return `<button type="button" class="filter-chip is-removable" data-clear="search-item" data-key="${escapeHtml(item.key)}" title="Remover título"><em>Título</em> ${escapeHtml(label)} <span class="chip-x" aria-hidden="true">×</span></button>`;
+        }).join("")
+        : (search
+          ? `<button type="button" class="filter-chip is-removable" data-clear="search" title="Remover busca"><em>Busca</em> ${escapeHtml(search)} <span class="chip-x" aria-hidden="true">×</span></button>`
+          : "");
       els.mainActiveFilters.innerHTML = `
         ${state.seller ? `<button type="button" class="filter-chip is-removable" data-clear="seller" title="Trocar vendedor"><em>Vendedor</em> ${escapeHtml(state.seller)} <span class="chip-x" aria-hidden="true">×</span></button>` : ""}
         <button type="button" class="filter-chip is-removable" data-clear="client" title="Remover cliente"><em>Cliente</em> ${escapeHtml(client.codigo)} · ${escapeHtml(client.nome)} <span class="chip-x" aria-hidden="true">×</span></button>
@@ -1447,7 +1537,7 @@
         ${hasActiveFilter
           ? `<button type="button" class="filter-chip is-removable ${tone}" data-clear="filter" title="Remover filtro"><em>Filtro</em> ${escapeHtml(filterLabel)} <span class="chip-x" aria-hidden="true">×</span></button>`
           : `<span class="filter-chip ${tone}"><em>Filtro</em> ${escapeHtml(filterLabel)}</span>`}
-        ${search ? `<button type="button" class="filter-chip is-removable" data-clear="search" title="Remover busca"><em>Busca</em> ${escapeHtml(search)} <span class="chip-x" aria-hidden="true">×</span></button>` : ""}
+        ${searchChips}
         <button type="button" class="clear-filters-main" id="btnClearFiltersMain"${hasTableFilter ? "" : " disabled"}>Limpar filtros</button>
       `;
     }
@@ -1480,10 +1570,7 @@
 
   function clearTableFilters() {
     state.filter = "all";
-    state.query = "";
-    if (els.q) els.q.value = "";
-    setTitleResultsOpen(false);
-    if (els.titleResults) els.titleResults.innerHTML = "";
+    clearSelectedQueries();
     syncFilterActiveState();
     render();
   }
@@ -1606,7 +1693,7 @@
     if (els.q) {
       els.q.disabled = !(hasClient || state.clients.length > 0);
       els.q.placeholder = hasClient
-        ? "Filtrar título, autor ou ISBN neste cliente"
+        ? "Buscar e selecionar títulos neste cliente"
         : "Buscar título ou ISBN nos clientes";
     }
 
@@ -1614,6 +1701,7 @@
     updateEmptyState();
     updateActiveFilters();
     renderSelectedProductChips();
+    renderSelectedTitleChips();
     renderIsbnResults();
 
     if (hasIsbnView && els.topSub) {
@@ -1676,7 +1764,15 @@
     const client = String(code || "")
       ? state.clients.find((c) => c.codigo === String(code))
       : null;
+    const changed = client?.codigo !== state.selectedClient?.codigo;
     state.selectedClient = client || null;
+    if (changed) {
+      state.selectedQueries = [];
+      state.query = "";
+      if (els.q) els.q.value = "";
+      setTitleResultsOpen(false);
+      if (els.titleResults) els.titleResults.innerHTML = "";
+    }
     if (client) {
       // Análise de cliente é o fluxo principal: fecha o resultado secundário de ISBN.
       clearIsbnSearch();
@@ -1721,6 +1817,7 @@
     state.stockLookup = new Map();
     state.mapaQuality = null;
     clearIsbnSearch();
+    clearSelectedQueries();
     els.clientQuery.value = "";
     els.clientMeta.textContent = "";
     els.mapaMeta.textContent = `${file.name} · ${rows.length.toLocaleString("pt-BR")} linhas · ${state.clients.length} cliente(s)`;
@@ -1983,7 +2080,28 @@
     if (!els.titleResults) return;
     const q = state.query.trim();
     const crossClient = !state.selectedClient && state.clients.length > 0;
-    if (!q || (!state.selectedClient && !crossClient)) {
+    if (!state.selectedClient && !crossClient) {
+      setTitleResultsOpen(false);
+      els.titleResults.innerHTML = "";
+      return;
+    }
+
+    if (state.selectedClient && !q && state.selectedQueries.length) {
+      els.titleResults.innerHTML = `
+        <div class="title-results-head">${state.selectedQueries.length.toLocaleString("pt-BR")} título(s) selecionado(s) — digite para adicionar mais</div>
+        ${state.selectedQueries.map((item) => `
+          <button type="button" class="title-result is-selected" data-mode="filter" data-isbn="${escapeHtml(item.isbn || "")}" data-titulo="${escapeHtml(item.titulo || "")}" data-query="${escapeHtml(item.query || item.titulo || item.isbn || "")}" role="option" aria-selected="true">
+            <strong>${escapeHtml(item.titulo || item.isbn || "Título")}</strong>
+            <span>${escapeHtml(item.isbn || "—")}</span>
+            <span class="pick-hint">Selecionado — clique para remover</span>
+          </button>
+        `).join("")}
+      `;
+      setTitleResultsOpen(true);
+      return;
+    }
+
+    if (!q) {
       setTitleResultsOpen(false);
       els.titleResults.innerHTML = "";
       return;
@@ -2018,8 +2136,9 @@
     }
 
     els.titleResults.innerHTML = `
-      <div class="title-results-head">${list.length.toLocaleString("pt-BR")} sugestão(ões) — clique para filtrar neste cliente</div>
+      <div class="title-results-head">${list.length.toLocaleString("pt-BR")} sugestão(ões) — clique para selecionar vários títulos</div>
       ${list.map((row) => {
+        const selected = isTitleQuerySelected(row);
         const saldo = row.stock?.consignado;
         const meta = [
           row.isbn || "",
@@ -2027,10 +2146,11 @@
           saldo == null ? "Sem saldo" : `Saldo ${saldo.toLocaleString("pt-BR")}`,
         ].filter(Boolean).join(" · ");
         return `
-          <button type="button" class="title-result" data-mode="filter" data-query="${escapeHtml(row.titulo || row.isbn || "")}" role="option">
+          <button type="button" class="title-result${selected ? " is-selected" : ""}" data-mode="filter" data-isbn="${escapeHtml(row.isbn || "")}" data-titulo="${escapeHtml(row.titulo || "")}" data-query="${escapeHtml(row.titulo || row.isbn || "")}" role="option" aria-selected="${selected}">
             <strong>${escapeHtml(row.titulo || "Sem título")}</strong>
             <span>${escapeHtml(row.autor || "—")}</span>
             <small>${escapeHtml(meta)}</small>
+            <span class="pick-hint">${selected ? "Selecionado — clique para remover" : "Clique para selecionar"}</span>
           </button>
         `;
       }).join("")}
@@ -2054,10 +2174,12 @@
       }
     }
 
-    if (state.selectedClient) render();
+    if (state.selectedClient && !state.selectedQueries.length) render();
   });
   els.q.addEventListener("focus", () => {
-    if (state.query.trim()) renderTitleResults(titleSuggestions(state.query));
+    if (state.query.trim() || state.selectedQueries.length) {
+      renderTitleResults(titleSuggestions(state.query));
+    }
   });
   els.q.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
@@ -2065,8 +2187,19 @@
       return;
     }
     if (e.key !== "Enter") return;
-    if (state.selectedClient || !state.clients.length) return;
     e.preventDefault();
+    if (state.selectedClient) {
+      const list = titleSuggestions(state.query);
+      if (!list.length) return;
+      toggleTitleQuerySelection(list[0]);
+      state.query = "";
+      if (els.q) els.q.value = "";
+      renderSelectedTitleChips();
+      renderTitleResults(titleSuggestions(""));
+      render();
+      return;
+    }
+    if (!state.clients.length) return;
     const list = titleSuggestions(state.query);
     if (!list.length) return;
     const first = list[0];
@@ -2093,10 +2226,27 @@
         setTitleResultsOpen(false);
         return;
       }
-      const value = btn.dataset.query || "";
-      state.query = value;
-      if (els.q) els.q.value = value;
-      setTitleResultsOpen(false);
+      toggleTitleQuerySelection({
+        isbn: btn.dataset.isbn || "",
+        titulo: btn.dataset.titulo || "",
+        query: btn.dataset.query || "",
+      });
+      state.query = "";
+      if (els.q) els.q.value = "";
+      renderSelectedTitleChips();
+      renderTitleResults(titleSuggestions(""));
+      render();
+      if (els.q) els.q.focus();
+    });
+  }
+  if (els.titleSelected) {
+    els.titleSelected.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-key]");
+      if (!btn) return;
+      const key = btn.dataset.key;
+      state.selectedQueries = state.selectedQueries.filter((item) => item.key !== key);
+      renderSelectedTitleChips();
+      renderTitleResults(titleSuggestions(state.query));
       render();
     });
   }
@@ -2126,15 +2276,20 @@
         return;
       }
       if (action === "search") {
-        state.query = "";
-        if (els.q) els.q.value = "";
-        setTitleResultsOpen(false);
-        if (els.titleResults) els.titleResults.innerHTML = "";
+        clearSelectedQueries();
+        render();
+        return;
+      }
+      if (action === "search-item") {
+        const key = chip.dataset.key;
+        state.selectedQueries = state.selectedQueries.filter((item) => item.key !== key);
+        renderSelectedTitleChips();
         render();
         return;
       }
       if (action === "client") {
         clearIsbnSearch();
+        clearSelectedQueries();
         selectClient("");
         return;
       }
