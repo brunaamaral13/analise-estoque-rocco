@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Outfit:wght@360;460;560;650&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260306z">
+  <link rel="stylesheet" href="styles.css?v=20260307a">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b5191a'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -15,7 +15,7 @@
     <div class="seller-gate-card">
       <p class="seller-gate-eyebrow">Rocco · Análise de estoque</p>
       <h1 id="sellerGateTitle">Quem está usando?</h1>
-      <p class="seller-gate-text">Selecione seu nome para continuar. Depois disso você poderá importar o CSV do Mapão.</p>
+      <p class="seller-gate-text">Selecione seu nome para continuar. Depois disso você poderá importar o Mapão (.xlsx ou .csv).</p>
       <div class="seller-gate-list" id="sellerGateList" role="listbox" aria-label="Lista de vendedores"></div>
       <button type="button" class="seller-gate-btn" id="btnSellerContinue" disabled>Continuar</button>
     </div>
@@ -55,11 +55,11 @@
         <p class="panel-meta" id="mapaMeta">Nenhum arquivo importado</p>
         <button type="button" class="btn-import" id="btnImport" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10"/><path d="m8 8 4-4 4 4"/><path d="M5 20h14"/></svg>
-          Importar CSV do Mapão
+          Importar Mapão (.xlsx ou CSV)
         </button>
-        <input id="fileMapa" type="file" accept=".csv,text/csv" hidden>
+        <input id="fileMapa" type="file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden>
         <div class="mapa-isbn-warn" id="mapaIsbnWarn" hidden role="status" aria-live="polite"></div>
-        <p class="panel-note">No Excel, formate ISBN e codbarra como Texto antes de salvar o CSV. Assim o cruzamento não perde dígitos.</p>
+        <p class="panel-note">Prefira o arquivo .xlsx do Excel. Salvar como CSV costuma transformar ISBN em notação científica (9,78E+12) e quebrar o cruzamento.</p>
       </section>
 
       <div class="side-kpis" id="sideKpis" hidden>
@@ -271,12 +271,12 @@
       <section class="table-wrap" aria-live="polite">
         <div class="empty" id="emptyState">
           <h2 id="emptyTitle">Esboço pronto para o cruzamento</h2>
-          <p id="emptyText">Com o vendedor identificado, importe o CSV do Mapão e escolha o cliente para ver o saldo e os dias sem giro.</p>
+          <p id="emptyText">Com o vendedor identificado, importe o Mapão e escolha o cliente para ver o saldo e os dias sem giro.</p>
           <button type="button" class="btn-import-main" id="btnImportMain">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10"/><path d="m8 8 4-4 4 4"/><path d="M5 20h14"/></svg>
-            Importar CSV do Mapão
+            Importar Mapão (.xlsx ou CSV)
           </button>
-          <p class="empty-hint" id="emptyHint">Aceita arquivo .csv do Mapão consolidado.</p>
+          <p class="empty-hint" id="emptyHint">Prefira .xlsx do Excel. CSV também funciona, mas o Excel costuma corromper o ISBN ao salvar.</p>
         </div>
 
         <table class="grid" id="grid" hidden>
@@ -298,6 +298,7 @@
     </main>
   </div>
 
-  <script src="app.js?v=20260306z"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="app.js?v=20260307a"></script>
 </body>
 </html>

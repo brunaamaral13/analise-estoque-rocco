@@ -283,10 +283,10 @@
       : 0;
 
     const sideText = show
-      ? `<strong>ISBN corrompido no CSV</strong>${quality.sciNotation.toLocaleString("pt-BR")} linhas (${pctSci}%) vieram em notação científica do Excel (ex.: 9,78656E+12). O cruzamento usa título/código do livro quando possível. Reexporte o CSV com ISBN e codbarra como Texto.`
+      ? `<strong>ISBN corrompido no arquivo</strong>${quality.sciNotation.toLocaleString("pt-BR")} linhas (${pctSci}%) vieram em notação científica (ex.: 9,78656E+12). Prefira importar o .xlsx do Excel em vez do CSV.`
       : "";
     const bannerText = show
-      ? `<strong>Atenção: ISBN inválido no arquivo importado</strong>${quality.sciNotation.toLocaleString("pt-BR")} de ${quality.total.toLocaleString("pt-BR")} linhas (${pctSci}%) estão com ISBN em notação científica; ${quality.unreliable.toLocaleString("pt-BR")} (${pctBad}%) sem ISBN confiável. No Excel, formate as colunas isbn e codbarra como Texto antes de salvar o CSV.`
+      ? `<strong>Atenção: ISBN inválido no arquivo importado</strong>${quality.sciNotation.toLocaleString("pt-BR")} de ${quality.total.toLocaleString("pt-BR")} linhas (${pctSci}%) estão com ISBN em notação científica; ${quality.unreliable.toLocaleString("pt-BR")} (${pctBad}%) sem ISBN confiável. Importe o arquivo .xlsx original do Excel — salvar como CSV costuma quebrar o ISBN mesmo com a coluna em Texto.`
       : "";
 
     if (els.mapaIsbnWarn) {
@@ -376,6 +376,38 @@
     return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   }
 
+  function matrixToObjects(matrix) {
+    if (!matrix.length) return [];
+    const headers = matrix[0].map((h) => String(h || "").trim().toLowerCase());
+    return matrix.slice(1)
+      .filter((r) => r.some((c) => String(c ?? "").trim() !== ""))
+      .map((r) => {
+        const obj = {};
+        headers.forEach((h, idx) => {
+          obj[h] = r[idx] == null ? "" : String(r[idx]).trim();
+        });
+        return obj;
+      });
+  }
+
+  function excelValueToString(value, headerName) {
+    if (value == null || value === "") return "";
+    if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const header = String(headerName || "").toLowerCase();
+      const forceFullDigits = /isbn|codbarra|codigo|cnpj|cpf|cep|inscricao/.test(header)
+        || Math.abs(value) >= 1e10;
+      if (forceFullDigits) {
+        return Math.abs(value) < 1e15
+          ? String(Math.round(value))
+          : value.toLocaleString("fullwide", { useGrouping: false });
+      }
+      // Preço e percentuais: mantém casas, no formato que o parseNumber já lê.
+      return String(value);
+    }
+    return String(value).trim();
+  }
+
   function parseCsv(text) {
     const rows = [];
     let row = [];
@@ -418,18 +450,47 @@
       rows.push(row);
     }
 
-    if (!rows.length) return [];
+    return matrixToObjects(rows);
+  }
 
-    const headers = rows[0].map((h) => String(h || "").trim().toLowerCase());
-    return rows.slice(1)
-      .filter((r) => r.some((c) => String(c || "").trim() !== ""))
+  function parseExcelBuffer(buffer) {
+    if (typeof XLSX === "undefined") {
+      throw new Error("Biblioteca de Excel não carregou. Verifique a internet ou use CSV.");
+    }
+    const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) return [];
+    const sheet = workbook.Sheets[sheetName];
+    const matrix = XLSX.utils.sheet_to_json(sheet, {
+      header: 1,
+      raw: true,
+      defval: "",
+      blankrows: false,
+    });
+    if (!matrix.length) return [];
+    const headers = matrix[0].map((h) => String(h || "").trim().toLowerCase());
+    return matrix.slice(1)
+      .filter((r) => r.some((c) => String(c ?? "").trim() !== ""))
       .map((r) => {
         const obj = {};
         headers.forEach((h, idx) => {
-          obj[h] = r[idx] == null ? "" : String(r[idx]).trim();
+          obj[h] = excelValueToString(r[idx], h);
         });
         return obj;
       });
+  }
+
+  function isExcelMapaFile(file) {
+    const name = String(file?.name || "").toLowerCase();
+    return name.endsWith(".xlsx") || name.endsWith(".xls")
+      || /spreadsheetml|ms-excel|excel/.test(String(file?.type || "").toLowerCase());
+  }
+
+  async function parseMapaFile(file) {
+    const buffer = await file.arrayBuffer();
+    if (isExcelMapaFile(file)) return parseExcelBuffer(buffer);
+    const text = decodeCsvBuffer(buffer);
+    return parseCsv(text);
   }
 
   function scoreText(text) {
@@ -1753,7 +1814,7 @@
         : "Selecione um cliente para analisar o estoque.";
     } else {
       els.emptyTitle.textContent = "Pronto para o cruzamento";
-      els.emptyText.textContent = "Importe o CSV do Mapão para cruzar o estoque do cliente com os mais vendidos Rocco.";
+      els.emptyText.textContent = "Importe o Mapão (.xlsx ou CSV) para cruzar o estoque do cliente com os mais vendidos Rocco.";
       els.topSub.textContent = state.seller
         ? `${state.seller} · importe o Mapão do cliente para ver o saldo ao lado do ranking Rocco.`
         : "Importe o Mapão do cliente para ver o saldo ao lado do ranking Rocco.";
@@ -1897,9 +1958,7 @@
   }
 
   async function onMapaFile(file) {
-    const buffer = await file.arrayBuffer();
-    const text = decodeCsvBuffer(buffer);
-    const rows = parseCsv(text);
+    const rows = await parseMapaFile(file);
     const quality = assessMapaIsbnQuality(rows);
 
     state.mapaRows = rows;
@@ -2035,7 +2094,9 @@
       await onMapaFile(file);
     } catch (err) {
       console.error(err);
-      els.mapaMeta.textContent = "Falha ao ler o CSV do Mapão.";
+      els.mapaMeta.textContent = err?.message
+        ? `Falha ao ler o Mapão: ${err.message}`
+        : "Falha ao ler o Mapão (.xlsx ou CSV).";
     }
   });
 
