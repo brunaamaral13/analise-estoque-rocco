@@ -417,9 +417,12 @@ h1, h2, p { margin: 0; }
 }
 .client-bar-controls {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr);
+  grid-template-columns: minmax(160px, 0.7fr) minmax(220px, 1fr) minmax(260px, 1.2fr);
   gap: 10px;
   align-items: start;
+}
+.client-seller-wrap select {
+  font-weight: 560;
 }
 .client-bar-secondary {
   margin-top: 12px;

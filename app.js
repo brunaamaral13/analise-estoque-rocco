@@ -37,6 +37,7 @@
     fileMapa: document.getElementById("fileMapa"),
     clientBar: document.getElementById("clientBar"),
     clientSelect: document.getElementById("clientSelect"),
+    sellerFilter: document.getElementById("sellerFilter"),
     clientQuery: document.getElementById("clientQuery"),
     clientResults: document.getElementById("clientResults"),
     clientMeta: document.getElementById("clientMeta"),
@@ -99,6 +100,7 @@
     clients: [],
     selectedClient: null,
     clientQuery: "",
+    sellerFilter: "",
     isbnSearchOpen: false,
     isbnFieldQuery: "",
     titleFieldQuery: "",
@@ -689,21 +691,39 @@
     return null;
   }
 
+  function rowSellerName(row) {
+    return String(row?.vendedor || row?.["vendedor "] || "").trim();
+  }
+
   function listClients(rows) {
     const byCode = new Map();
     rows.forEach((r) => {
       const code = String(r.codigo || "").trim();
       if (!code) return;
+      const vendedor = rowSellerName(r);
       if (!byCode.has(code)) {
         byCode.set(code, {
           codigo: code,
           nome: r.nome || "Cliente sem nome",
           cidade: r.cidade || "",
           estado: r.estado || "",
+          vendedor: vendedor || "",
         });
+        return;
       }
+      const prev = byCode.get(code);
+      if (!prev.vendedor && vendedor) prev.vendedor = vendedor;
     });
     return [...byCode.values()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }
+
+  function listMapaSellers(clients = state.clients) {
+    const set = new Set();
+    clients.forEach((c) => {
+      const name = String(c.vendedor || "").trim();
+      if (name) set.add(name);
+    });
+    return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
   }
 
   function rowMatchesIsbn(row, aliasSet, queryDigits) {
@@ -952,11 +972,13 @@
       const fdias = parseIntSafe(r.fdias);
       const vendido = parseIntSafe(r.vendido) || 0;
 
+      const vendedor = rowSellerName(r);
       const prev = byClient.get(code) || {
         codigo: code,
         nome: r.nome || "Cliente sem nome",
         cidade: r.cidade || "",
         estado: r.estado || "",
+        vendedor: vendedor || "",
         consignado: 0,
         valorLiquido: 0,
         fdias: null,
@@ -968,11 +990,14 @@
       prev.vendido += vendido;
       if (fdias != null) prev.fdias = prev.fdias == null ? fdias : Math.max(prev.fdias, fdias);
       if (!prev.nome && r.nome) prev.nome = r.nome;
+      if (!prev.vendedor && vendedor) prev.vendedor = vendedor;
       byClient.set(code, prev);
     });
 
+    const seller = normalizeSearch(state.sellerFilter);
     const clients = [...byClient.values()]
       .filter((c) => (c.consignado || 0) > 0)
+      .filter((c) => !seller || normalizeSearch(c.vendedor) === seller)
       .sort((a, b) => (b.consignado || 0) - (a.consignado || 0));
 
     return {
@@ -1228,10 +1253,11 @@
       } else {
         els.isbnTbody.innerHTML = clients.map((c) => {
           const uf = [c.cidade, c.estado].filter(Boolean).join("/") || "—";
+          const seller = c.vendedor ? ` · ${c.vendedor}` : "";
           return `
             <tr data-code="${escapeHtml(c.codigo)}">
               <td>${escapeHtml(c.codigo)}</td>
-              <td>${escapeHtml(c.nome)}</td>
+              <td>${escapeHtml(c.nome)}${seller ? `<span class="author">${escapeHtml(seller.trim())}</span>` : ""}</td>
               <td>${escapeHtml(uf)}</td>
               <td class="num">${(c.consignado || 0).toLocaleString("pt-BR")}</td>
               <td class="num">${money(c.valorLiquido || 0)}</td>
@@ -1254,9 +1280,11 @@
 
   function filteredClients() {
     const q = normalizeSearch(state.clientQuery);
-    if (!q) return state.clients;
+    const seller = normalizeSearch(state.sellerFilter);
     return state.clients.filter((c) => {
-      const blob = normalizeSearch(`${c.codigo} ${c.nome} ${c.cidade} ${c.estado}`);
+      if (seller && normalizeSearch(c.vendedor) !== seller) return false;
+      if (!q) return true;
+      const blob = normalizeSearch(`${c.codigo} ${c.nome} ${c.cidade} ${c.estado} ${c.vendedor}`);
       return blob.includes(q) || normalizeSearch(c.codigo).startsWith(q);
     });
   }
@@ -1817,11 +1845,13 @@
       ${shown.map((c) => {
         const place = [c.cidade, c.estado].filter(Boolean).join("/");
         const active = state.selectedClient?.codigo === c.codigo ? " is-active" : "";
+        const seller = c.vendedor ? `Vendedor ${c.vendedor}` : "";
+        const meta = [place, seller].filter(Boolean).join(" · ");
         return `
           <button type="button" class="client-result${active}" data-code="${escapeHtml(c.codigo)}" role="option" aria-selected="${state.selectedClient?.codigo === c.codigo}">
             <strong>${escapeHtml(c.codigo)}</strong>
             <span>${escapeHtml(c.nome)}</span>
-            ${place ? `<small>${escapeHtml(place)}</small>` : ""}
+            ${meta ? `<small>${escapeHtml(meta)}</small>` : ""}
           </button>
         `;
       }).join("")}
@@ -1830,25 +1860,57 @@
     setClientResultsOpen(true);
   }
 
+  function renderSellerFilterOptions() {
+    if (!els.sellerFilter) return;
+    const sellers = listMapaSellers();
+    const current = state.sellerFilter || "";
+    els.sellerFilter.innerHTML = `
+      <option value="">Todos os vendedores</option>
+      ${sellers.map((name) => `
+        <option value="${escapeHtml(name)}"${name === current ? " selected" : ""}>${escapeHtml(name)}</option>
+      `).join("")}
+    `;
+    els.sellerFilter.value = current;
+    els.sellerFilter.disabled = sellers.length === 0;
+  }
+
   function renderClientPicker() {
     const hasClients = state.clients.length > 0;
     if (els.clientBar) els.clientBar.hidden = !hasClients;
     if (!hasClients) return;
 
+    renderSellerFilterOptions();
+
     const selectedCode = state.selectedClient?.codigo || "";
-    const placeholderSelected = selectedCode ? "" : " selected";
-    // Select always keeps the full client list.
-    const options = state.clients
+    const visible = filteredClients();
+    const selectedVisible = visible.some((c) => c.codigo === selectedCode);
+    const placeholderSelected = !selectedCode || !selectedVisible ? " selected" : "";
+    const options = visible
       .map((c) => {
-        const label = `${c.codigo} · ${c.nome}`;
-        const selected = c.codigo === selectedCode ? " selected" : "";
+        const seller = c.vendedor ? ` · ${c.vendedor}` : "";
+        const label = `${c.codigo} · ${c.nome}${seller}`;
+        const selected = c.codigo === selectedCode && selectedVisible ? " selected" : "";
         return `<option value="${escapeHtml(c.codigo)}"${selected}>${escapeHtml(label)}</option>`;
       })
       .join("");
 
-    els.clientSelect.innerHTML = `<option value=""${placeholderSelected}>Selecione um cliente</option>${options}`;
-    els.clientSelect.value = selectedCode;
-    renderClientResults(filteredClients());
+    els.clientSelect.innerHTML = `<option value=""${placeholderSelected}>Selecione um cliente (${visible.length})</option>${options}`;
+    els.clientSelect.value = selectedVisible ? selectedCode : "";
+    if (selectedCode && !selectedVisible) {
+      // Cliente atual fora do filtro de vendedor: limpa sem reentrar no render.
+      state.selectedClient = null;
+      state.stockByKey = new Map();
+      state.stockLookup = new Map();
+      state.mapaQuality = null;
+      if (els.clientMeta) els.clientMeta.textContent = "";
+      if (els.grid) els.grid.hidden = true;
+      if (els.summary) els.summary.hidden = true;
+      if (els.actions) els.actions.hidden = true;
+      if (els.filters) els.filters.hidden = true;
+      if (els.sideKpis) els.sideKpis.hidden = true;
+      if (els.emptyState) els.emptyState.hidden = false;
+    }
+    renderClientResults(visible);
   }
 
   function updateEmptyState() {
@@ -2002,9 +2064,10 @@
     state.stockLookup = built.lookup;
     state.mapaQuality = built;
     const place = [client.cidade, client.estado].filter(Boolean).join("/");
-    els.clientMeta.textContent = place
-      ? `Código ${client.codigo} · ${place}`
-      : `Código ${client.codigo}`;
+    const bits = [`Código ${client.codigo}`];
+    if (place) bits.push(place);
+    if (client.vendedor) bits.push(`Vendedor ${client.vendedor}`);
+    els.clientMeta.textContent = bits.join(" · ");
     els.topSub.textContent = `${client.nome} · ranking Rocco com saldo do Mapão`;
 
     render();
@@ -2018,6 +2081,7 @@
     state.mapaRows = rows;
     state.clients = listClients(rows);
     state.clientQuery = "";
+    state.sellerFilter = "";
     state.selectedClient = null;
     state.stockByKey = new Map();
     state.stockLookup = new Map();
@@ -2026,6 +2090,7 @@
     clearIsbnSearch();
     clearSelectedQueries();
     els.clientQuery.value = "";
+    if (els.sellerFilter) els.sellerFilter.value = "";
     els.clientMeta.textContent = "";
 
     const baseMeta = `${file.name} · Excel · ${rows.length.toLocaleString("pt-BR")} linhas · ${state.clients.length} cliente(s) · ISBN ok ${quality.reliable.toLocaleString("pt-BR")}`;
@@ -2152,6 +2217,15 @@
   });
 
   els.clientSelect.addEventListener("change", (e) => selectClient(e.target.value));
+  if (els.sellerFilter) {
+    els.sellerFilter.addEventListener("change", (e) => {
+      state.sellerFilter = e.target.value || "";
+      if (state.selectedProducts.length) {
+        state.isbnResult = findClientsBySelectedProducts(state.selectedProducts);
+      }
+      render();
+    });
+  }
   els.clientQuery.addEventListener("input", (e) => {
     state.clientQuery = e.target.value;
     renderClientResults(filteredClients());
