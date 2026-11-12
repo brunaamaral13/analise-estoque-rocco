@@ -1216,8 +1216,14 @@
     return state.sortDir === "asc" ? cmp : -cmp;
   }
 
+  function reliableIsbnValue(value) {
+    if (!value || value === "—") return "";
+    const normalized = normalizeIsbn(value) || expandIsbnCandidate(value);
+    return isReliableIsbn(normalized) ? normalized : "";
+  }
+
   function titleQueryKey(item) {
-    const isbn = item?.isbn && isReliableIsbn(item.isbn) ? item.isbn : "";
+    const isbn = reliableIsbnValue(item?.isbn);
     if (isbn) return `isbn:${isbn}`;
     const title = normalizeTitle(item?.titulo || item?.query || "");
     if (title) return `title:${title}`;
@@ -1226,16 +1232,35 @@
 
   function rowMatchesSelectedQuery(row, item) {
     if (!row || !item) return false;
-    if (item.isbn) {
-      const aliases = new Set(isbnAliases(item.isbn));
-      if (row.isbn && (aliases.has(row.isbn) || row.isbn === item.isbn)) return true;
+
+    const itemKey = item.key || titleQueryKey(item);
+    if (!itemKey) return false;
+
+    // Mesma chave usada na seleção (ISBN confiável ou título normalizado).
+    if (itemKey === titleQueryKey(row)) return true;
+    if (row.stock && itemKey === titleQueryKey({
+      isbn: row.stock.isbn,
+      titulo: row.stock.titulo || row.stock.titleKey,
+    })) return true;
+
+    const rowTitle = normalizeTitle(row.titulo || "");
+    const stockTitle = row.stock?.titleKey || normalizeTitle(row.stock?.titulo || "");
+    const itemTitle = normalizeTitle(item.titulo || item.query || "");
+
+    if (itemKey.startsWith("title:") && (itemKey === `title:${rowTitle}` || (stockTitle && itemKey === `title:${stockTitle}`))) {
+      return true;
     }
-    const title = normalizeTitle(item.titulo || "");
-    if (title && normalizeTitle(row.titulo) === title) return true;
-    if (item.query) {
-      const blob = `${row.titulo} ${row.autor} ${row.isbn}`.toLowerCase();
-      return blob.includes(String(item.query).toLowerCase());
+
+    if (itemKey.startsWith("isbn:")) {
+      const want = itemKey.slice(5);
+      const rowAliases = new Set([
+        ...isbnAliases(row.isbn),
+        ...isbnAliases(row.stock?.isbn),
+      ]);
+      if (want && rowAliases.has(want)) return true;
     }
+
+    if (itemTitle && (rowTitle === itemTitle || stockTitle === itemTitle)) return true;
     return false;
   }
 
@@ -1253,9 +1278,9 @@
     } else {
       state.selectedQueries.push({
         key,
-        isbn: item.isbn || "",
+        isbn: reliableIsbnValue(item.isbn),
         titulo: item.titulo || item.query || "",
-        query: item.query || item.titulo || item.isbn || "",
+        query: item.query || item.titulo || reliableIsbnValue(item.isbn) || "",
       });
     }
   }
@@ -1288,40 +1313,47 @@
     }).join("");
   }
 
-  function rowsForRender() {
+  function rowsMatchingTitleSelection(allRows = buildAllRows()) {
     const selected = state.selectedQueries;
+    if (selected.length) {
+      return allRows.filter((row) => selected.some((item) => rowMatchesSelectedQuery(row, item)));
+    }
     const q = state.query.trim().toLowerCase();
+    if (!q) return allRows;
+    return allRows.filter((row) => {
+      const blob = `${row.titulo} ${row.autor} ${row.isbn}`.toLowerCase();
+      return blob.includes(q);
+    });
+  }
 
-    return buildAllRows()
-      .filter((row) => {
-        if (state.filter === "ranking" && !row.inRanking) return false;
-        if (state.filter === "extra" && row.inRanking) return false;
-        if (
-          state.filter === "com"
-          && !["ok", "idle", "idle180", "alert", "urgent"].includes(row.sit.key)
-        ) return false;
-        if (
-          state.filter === "sem"
-          && row.sit.key !== "zero"
-          && row.sit.key !== "rupture"
-        ) return false;
-        if (state.filter === "urgent" && row.sit.key !== "urgent") return false;
-        if (state.filter === "alert" && row.sit.key !== "alert") return false;
-        if (state.filter === "parado90") {
-          if ((row.stock?.consignado || 0) <= 0) return false;
-          if ((row.stock?.fdias || 0) < IDLE_DAYS) return false;
-        }
-        if (state.filter === "parado180") {
-          if ((row.stock?.consignado || 0) <= 0) return false;
-          if ((row.stock?.fdias || 0) < IDLE_DAYS_LONG) return false;
-        }
-        if (selected.length) {
-          return selected.some((item) => rowMatchesSelectedQuery(row, item));
-        }
-        if (!q) return true;
-        const blob = `${row.titulo} ${row.autor} ${row.isbn}`.toLowerCase();
-        return blob.includes(q);
-      })
+  function rowMatchesSituationFilter(row) {
+    if (state.filter === "ranking" && !row.inRanking) return false;
+    if (state.filter === "extra" && row.inRanking) return false;
+    if (
+      state.filter === "com"
+      && !["ok", "idle", "idle180", "alert", "urgent"].includes(row.sit.key)
+    ) return false;
+    if (
+      state.filter === "sem"
+      && row.sit.key !== "zero"
+      && row.sit.key !== "rupture"
+    ) return false;
+    if (state.filter === "urgent" && row.sit.key !== "urgent") return false;
+    if (state.filter === "alert" && row.sit.key !== "alert") return false;
+    if (state.filter === "parado90") {
+      if ((row.stock?.consignado || 0) <= 0) return false;
+      if ((row.stock?.fdias || 0) < IDLE_DAYS) return false;
+    }
+    if (state.filter === "parado180") {
+      if ((row.stock?.consignado || 0) <= 0) return false;
+      if ((row.stock?.fdias || 0) < IDLE_DAYS_LONG) return false;
+    }
+    return true;
+  }
+
+  function rowsForRender() {
+    return rowsMatchingTitleSelection()
+      .filter(rowMatchesSituationFilter)
       .sort(compareRows);
   }
 
@@ -1336,31 +1368,18 @@
     });
   }
 
-  function updateKpis() {
+  function updateKpis(rows) {
     let match = 0;
     let zero = 0;
     let idle90 = 0;
     let idle180 = 0;
-    const matchedKeys = new Set();
 
-    state.ranking.forEach((item) => {
-      const stock = findStockForRanking(item);
-      if (!stock) {
-        zero += 1;
-        return;
-      }
-      match += 1;
-      matchedKeys.add(stock.key);
-      if ((stock.consignado || 0) <= 0) zero += 1;
-      if ((stock.fdias || 0) >= IDLE_DAYS) idle90 += 1;
-      if ((stock.fdias || 0) >= IDLE_DAYS_LONG) idle180 += 1;
-    });
-
-    state.stockByKey.forEach((stock) => {
-      if (matchedKeys.has(stock.key)) return;
-      if ((stock.consignado || 0) <= 0) zero += 1;
-      if ((stock.fdias || 0) >= IDLE_DAYS) idle90 += 1;
-      if ((stock.fdias || 0) >= IDLE_DAYS_LONG) idle180 += 1;
+    rows.forEach((row) => {
+      const stock = row.stock;
+      if (row.inRanking && stock) match += 1;
+      if (!stock || (stock.consignado || 0) <= 0) zero += 1;
+      if (stock && (stock.fdias || 0) >= IDLE_DAYS) idle90 += 1;
+      if (stock && (stock.fdias || 0) >= IDLE_DAYS_LONG) idle180 += 1;
     });
 
     els.kpiMatch.textContent = match.toLocaleString("pt-BR");
@@ -1396,7 +1415,7 @@
     return stock.preco == null ? null : stock.preco;
   }
 
-  function updateActionKpis() {
+  function updateActionKpis(rows) {
     let urgent = 0;
     let alert = 0;
     let acerto = 0;
@@ -1407,39 +1426,42 @@
     let valorParado = 0;
     let potencial = 0;
 
-    state.ranking.forEach((item) => {
-      if (item.ranking > TOP_SALDO_RANK) return;
-      top150 += 1;
-      const stock = findStockForRanking(item);
+    rows.forEach((row) => {
+      const stock = row.stock;
       const saldo = stock ? (stock.consignado || 0) : 0;
+      const inTop150 = row.inRanking && row.ranking != null && row.ranking >= 1 && row.ranking <= TOP_SALDO_RANK;
 
-      if (!stock || saldo <= 0) {
-        rupture += 1;
+      if (inTop150) {
+        top150 += 1;
+        if (!stock || saldo <= 0) {
+          rupture += 1;
+          urgent += 1;
+          const unit = unitNetPrice(stock);
+          if (unit != null) potencial += TARGET_OK_SALDO * unit;
+        } else {
+          withStock += 1;
+          const unit = unitNetPrice(stock);
+          if (saldo <= 3) {
+            urgent += 1;
+            if (unit != null) potencial += Math.max(TARGET_OK_SALDO - saldo, 0) * unit;
+          } else if (saldo <= 7) {
+            alert += 1;
+            if (unit != null) potencial += Math.max(TARGET_OK_SALDO - saldo, 0) * unit;
+          }
+        }
+      } else if (row.sit?.key === "urgent") {
         urgent += 1;
-        const unit = unitNetPrice(stock);
-        if (unit != null) potencial += TARGET_OK_SALDO * unit;
-        return;
-      }
-
-      withStock += 1;
-      const unit = unitNetPrice(stock);
-
-      if (saldo <= 3) {
-        urgent += 1;
-        if (unit != null) potencial += Math.max(TARGET_OK_SALDO - saldo, 0) * unit;
-      } else if (saldo <= 7) {
+      } else if (row.sit?.key === "alert") {
         alert += 1;
-        if (unit != null) potencial += Math.max(TARGET_OK_SALDO - saldo, 0) * unit;
       }
-    });
 
-    state.stockByKey.forEach((stock) => {
-      if ((stock.consignado || 0) <= 0) return;
-      const fdias = stock.fdias || 0;
-      if (fdias >= IDLE_DAYS) acerto += 1;
-      if (fdias >= IDLE_DAYS_LONG) {
-        idle180Count += 1;
-        valorParado += stock.valorLiquido || 0;
+      if (stock && saldo > 0) {
+        const fdias = stock.fdias || 0;
+        if (fdias >= IDLE_DAYS) acerto += 1;
+        if (fdias >= IDLE_DAYS_LONG) {
+          idle180Count += 1;
+          valorParado += stock.valorLiquido || 0;
+        }
       }
     });
 
@@ -1460,8 +1482,10 @@
       </span>
     `;
     syncFilterActiveState();
-    els.sumCoverage.textContent = `${pctStock}% com saldo`;
-    els.sumCoverageMeta.textContent = `${pctRupture}% em ruptura · ${withStock}/${top150} com estoque`;
+    els.sumCoverage.textContent = top150 ? `${pctStock}% com saldo` : (rows.length ? "—": "—");
+    els.sumCoverageMeta.textContent = top150
+      ? `${pctRupture}% em ruptura · ${withStock}/${top150} com estoque`
+      : `${rows.length.toLocaleString("pt-BR")} título(s) no recorte`;
     els.sumIdleValue.textContent = money(valorParado);
     els.sumIdleMeta.textContent = `${idle180Count.toLocaleString("pt-BR")} ISBN(s) parados há 180+ dias`;
     els.sumRestockValue.textContent = money(potencial);
@@ -1714,10 +1738,12 @@
 
     if (!hasClient) return;
 
-    updateKpis();
-    if (els.actions) updateActionKpis();
     updateSortHeaders();
-    const rows = rowsForRender();
+    const scopedRows = rowsMatchingTitleSelection();
+    const rows = scopedRows.filter(rowMatchesSituationFilter).sort(compareRows);
+    // KPIs/roteiro acompanham o recorte de títulos; a tabela aplica também o chip de situação.
+    updateKpis(scopedRows);
+    if (els.actions) updateActionKpis(scopedRows);
     updateSummary(rows);
     els.tbody.innerHTML = rows.map((row) => {
       const saldo = row.stock ? row.stock.consignado : null;
