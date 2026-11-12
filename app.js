@@ -783,11 +783,13 @@
       const reliable = [...isbnAliases(r.isbn), ...isbnAliases(r.codbarra)].find(isReliableIsbn);
       if (reliable) isbn = reliable;
 
+      const vendedor = rowSellerName(r);
       const prev = byClient.get(code) || {
         codigo: code,
         nome: r.nome || "Cliente sem nome",
         cidade: r.cidade || "",
         estado: r.estado || "",
+        vendedor: vendedor || "",
         consignado: 0,
         valorLiquido: 0,
         fdias: null,
@@ -799,6 +801,7 @@
       prev.vendido += vendido;
       if (fdias != null) prev.fdias = prev.fdias == null ? fdias : Math.max(prev.fdias, fdias);
       if (!prev.nome && r.nome) prev.nome = r.nome;
+      if (!prev.vendedor && vendedor) prev.vendedor = vendedor;
       byClient.set(code, prev);
     });
 
@@ -810,8 +813,10 @@
       }
     }
 
+    const seller = normalizeSearch(state.sellerFilter);
     const clients = [...byClient.values()]
       .filter((c) => (c.consignado || 0) > 0)
+      .filter((c) => !seller || normalizeSearch(c.vendedor) === seller)
       .sort((a, b) => (b.consignado || 0) - (a.consignado || 0));
 
     return { query: q, titulo, isbn, clients };
