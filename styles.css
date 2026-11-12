@@ -178,6 +178,38 @@ h1, h2, p { margin: 0; }
   line-height: 1.45;
   opacity: .78;
 }
+.mapa-isbn-warn {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #3a0f12;
+  border: 1px solid rgba(255, 196, 196, 0.35);
+  color: #ffe4e4;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.mapa-isbn-warn strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.mapa-isbn-banner {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff4f4;
+  border: 1px solid #f0b7bc;
+  color: #7a1b22;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.mapa-isbn-banner strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
 .active-filters {
   list-style: none;
   margin: 10px 0 0;

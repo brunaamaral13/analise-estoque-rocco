@@ -29,6 +29,8 @@
     btnChangeSeller: document.getElementById("btnChangeSeller"),
     rankMeta: document.getElementById("rankMeta"),
     mapaMeta: document.getElementById("mapaMeta"),
+    mapaIsbnWarn: document.getElementById("mapaIsbnWarn"),
+    mapaIsbnBanner: document.getElementById("mapaIsbnBanner"),
     btnImport: document.getElementById("btnImport"),
     btnImportMain: document.getElementById("btnImportMain"),
     emptyHint: document.getElementById("emptyHint"),
@@ -110,6 +112,7 @@
     sortKey: "ranking",
     sortDir: "asc",
     mapaQuality: null,
+    mapaIsbnQuality: null,
   };
 
   function logSellerAccess(vendedor) {
@@ -227,6 +230,73 @@
 
   function reliableRowIsbn(row) {
     return [...isbnAliases(row?.isbn), ...isbnAliases(row?.codbarra)].find(isReliableIsbn) || "";
+  }
+
+  function looksLikeExcelSciIsbn(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return false;
+    if (/[eE][+-]?\d+/.test(raw)) return true;
+    const expanded = expandIsbnCandidate(raw);
+    return Boolean(expanded) && expanded.length === 13 && /0{4,}$/.test(expanded);
+  }
+
+  function assessMapaIsbnQuality(rows) {
+    let total = 0;
+    let sciNotation = 0;
+    let unreliable = 0;
+    let reliable = 0;
+    let empty = 0;
+
+    rows.forEach((r) => {
+      total += 1;
+      const isbnRaw = String(r.isbn || "").trim();
+      const barraRaw = String(r.codbarra || "").trim();
+      if (!isbnRaw && !barraRaw) {
+        empty += 1;
+        unreliable += 1;
+        return;
+      }
+      const sci = looksLikeExcelSciIsbn(isbnRaw) || looksLikeExcelSciIsbn(barraRaw);
+      if (sci) sciNotation += 1;
+      if (reliableRowIsbn(r)) reliable += 1;
+      else unreliable += 1;
+    });
+
+    return {
+      total,
+      sciNotation,
+      unreliable,
+      reliable,
+      empty,
+      hasProblem: sciNotation > 0 || unreliable > total * 0.05,
+    };
+  }
+
+  function renderMapaIsbnWarning() {
+    const quality = state.mapaIsbnQuality;
+    const show = Boolean(quality && quality.hasProblem && state.mapaRows.length);
+    const pctSci = quality && quality.total
+      ? Math.round((quality.sciNotation / quality.total) * 100)
+      : 0;
+    const pctBad = quality && quality.total
+      ? Math.round((quality.unreliable / quality.total) * 100)
+      : 0;
+
+    const sideText = show
+      ? `<strong>ISBN corrompido no CSV</strong>${quality.sciNotation.toLocaleString("pt-BR")} linhas (${pctSci}%) vieram em notação científica do Excel (ex.: 9,78656E+12). O cruzamento usa título/código do livro quando possível. Reexporte o CSV com ISBN e codbarra como Texto.`
+      : "";
+    const bannerText = show
+      ? `<strong>Atenção: ISBN inválido no arquivo importado</strong>${quality.sciNotation.toLocaleString("pt-BR")} de ${quality.total.toLocaleString("pt-BR")} linhas (${pctSci}%) estão com ISBN em notação científica; ${quality.unreliable.toLocaleString("pt-BR")} (${pctBad}%) sem ISBN confiável. No Excel, formate as colunas isbn e codbarra como Texto antes de salvar o CSV.`
+      : "";
+
+    if (els.mapaIsbnWarn) {
+      els.mapaIsbnWarn.hidden = !show;
+      els.mapaIsbnWarn.innerHTML = sideText;
+    }
+    if (els.mapaIsbnBanner) {
+      els.mapaIsbnBanner.hidden = !show;
+      els.mapaIsbnBanner.innerHTML = bannerText;
+    }
   }
 
   function isbn10To13(isbn10) {
@@ -1726,6 +1796,7 @@
     updateActiveFilters();
     renderSelectedProductChips();
     renderSelectedTitleChips();
+    renderMapaIsbnWarning();
     renderIsbnResults();
 
     if (hasIsbnView && els.topSub) {
@@ -1822,11 +1893,6 @@
       : `Código ${client.codigo}`;
     els.topSub.textContent = `${client.nome} · ranking Rocco com saldo do Mapão`;
 
-    if (built.badIsbnRows > 0) {
-      const pct = Math.round((built.badIsbnRows / Math.max(built.totalRows, 1)) * 100);
-      els.mapaMeta.textContent = `${els.mapaMeta.textContent.split(" · aviso:")[0]} · aviso: ${built.badIsbnRows.toLocaleString("pt-BR")} linhas (${pct}%) com ISBN inválido no Excel; cruzamento usa título/código do livro quando possível`;
-    }
-
     render();
   }
 
@@ -1834,6 +1900,7 @@
     const buffer = await file.arrayBuffer();
     const text = decodeCsvBuffer(buffer);
     const rows = parseCsv(text);
+    const quality = assessMapaIsbnQuality(rows);
 
     state.mapaRows = rows;
     state.clients = listClients(rows);
@@ -1842,11 +1909,22 @@
     state.stockByKey = new Map();
     state.stockLookup = new Map();
     state.mapaQuality = null;
+    state.mapaIsbnQuality = quality;
     clearIsbnSearch();
     clearSelectedQueries();
     els.clientQuery.value = "";
     els.clientMeta.textContent = "";
-    els.mapaMeta.textContent = `${file.name} · ${rows.length.toLocaleString("pt-BR")} linhas · ${state.clients.length} cliente(s)`;
+
+    const baseMeta = `${file.name} · ${rows.length.toLocaleString("pt-BR")} linhas · ${state.clients.length} cliente(s)`;
+    if (quality.sciNotation > 0) {
+      const pct = Math.round((quality.sciNotation / Math.max(quality.total, 1)) * 100);
+      els.mapaMeta.textContent = `${baseMeta} · aviso: ${quality.sciNotation.toLocaleString("pt-BR")} ISBN(s) em notação científica (${pct}%)`;
+    } else if (quality.unreliable > 0) {
+      const pct = Math.round((quality.unreliable / Math.max(quality.total, 1)) * 100);
+      els.mapaMeta.textContent = `${baseMeta} · aviso: ${quality.unreliable.toLocaleString("pt-BR")} linha(s) sem ISBN confiável (${pct}%)`;
+    } else {
+      els.mapaMeta.textContent = baseMeta;
+    }
 
     render();
   }

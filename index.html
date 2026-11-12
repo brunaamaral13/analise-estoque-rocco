@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Outfit:wght@360;460;560;650&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260306y">
+  <link rel="stylesheet" href="styles.css?v=20260306z">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b5191a'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -58,6 +58,7 @@
           Importar CSV do Mapão
         </button>
         <input id="fileMapa" type="file" accept=".csv,text/csv" hidden>
+        <div class="mapa-isbn-warn" id="mapaIsbnWarn" hidden role="status" aria-live="polite"></div>
         <p class="panel-note">No Excel, formate ISBN e codbarra como Texto antes de salvar o CSV. Assim o cruzamento não perde dígitos.</p>
       </section>
 
@@ -82,6 +83,7 @@
     </aside>
 
     <main class="main">
+      <div class="mapa-isbn-banner" id="mapaIsbnBanner" hidden role="alert"></div>
       <section class="client-bar" id="clientBar" hidden>
         <div class="client-bar-head">
           <p class="client-bar-label">Cliente em análise</p>
@@ -296,6 +298,6 @@
     </main>
   </div>
 
-  <script src="app.js?v=20260306y"></script>
+  <script src="app.js?v=20260306z"></script>
 </body>
 </html>
