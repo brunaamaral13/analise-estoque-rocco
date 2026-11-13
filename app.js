@@ -1910,6 +1910,16 @@
         titleRupture.set(key, prev);
       });
 
+      // Totais do Mapão inteiro do cliente (não só Top 150).
+      let isbnsConsignados = 0;
+      let volumeConsignado = 0;
+      built.byKey.forEach((stock) => {
+        const qty = stock.consignado || 0;
+        if (qty <= 0) return;
+        isbnsConsignados += 1;
+        volumeConsignado += qty;
+      });
+
       clientRows.push({
         codigo: client.codigo,
         nome: client.nome,
@@ -1920,6 +1930,8 @@
         rupture: metrics.rupture,
         valorParado: metrics.valorParado,
         potencial: metrics.potencial,
+        isbnsConsignados,
+        volumeConsignado,
         score: (100 - metrics.pctStock) + metrics.pctRupture,
       });
     });
@@ -2049,6 +2061,12 @@
     refreshSelectedProductResults();
   }
 
+  function portfolioStockLabel(c) {
+    const isbns = Number(c.isbnsConsignados || 0);
+    const volume = Number(c.volumeConsignado || 0);
+    return `${isbns.toLocaleString("pt-BR")} ISBNs · ${volume.toLocaleString("pt-BR")} un.`;
+  }
+
   function renderPortfolioClientList(target, rows, valueFn, { ignorable = false } = {}) {
     if (!target) return;
     if (!rows.length) {
@@ -2059,7 +2077,7 @@
       const place = [c.cidade, c.estado].filter(Boolean).join("/");
       const meta = [c.codigo, place].filter(Boolean).join(" · ");
       const ignoreBtn = ignorable
-        ? `<button type="button" class="portfolio-ignore-btn" data-portfolio-ignore="${escapeHtml(c.codigo)}" title="Tirar esta loja do roteiro e das prioridades">Desconsiderar</button>`
+        ? `<button type="button" class="portfolio-ignore-btn" data-portfolio-ignore="${escapeHtml(c.codigo)}" title="Tirar esta loja do roteiro e das prioridades" aria-label="Desconsiderar ${escapeHtml(c.nome)}">ignorar</button>`
         : "";
       return `
         <li class="portfolio-list-row">
@@ -2068,6 +2086,7 @@
               <strong>${escapeHtml(c.nome)}</strong>
               <span>${escapeHtml(meta || c.codigo)}</span>
             </span>
+            <span class="portfolio-item-stock" title="ISBNs com saldo e volume total consignado no Mapão deste cliente">${escapeHtml(portfolioStockLabel(c))}</span>
             <em>${escapeHtml(valueFn(c))}</em>
           </button>
           ${ignoreBtn}
@@ -2099,6 +2118,8 @@
       const detail = c.pctStock == null
         ? "desconsiderada na análise"
         : `cobertura ${c.pctStock}% · ${Number(c.rupture || 0).toLocaleString("pt-BR")} faltando`;
+      const stock = c.pctStock == null ? "" : `
+            <span class="portfolio-item-stock">${escapeHtml(portfolioStockLabel(c))}</span>`;
       return `
         <li class="portfolio-list-row is-ignored">
           <button type="button" class="portfolio-list-open" data-portfolio-client="${escapeHtml(c.codigo)}">
@@ -2106,9 +2127,10 @@
               <strong>${escapeHtml(c.nome)}</strong>
               <span>${escapeHtml(meta || c.codigo)}</span>
             </span>
+            ${stock}
             <em>${escapeHtml(detail)}</em>
           </button>
-          <button type="button" class="portfolio-ignore-btn is-restore" data-portfolio-consider="${escapeHtml(c.codigo)}" title="Voltar a considerar no roteiro e nas prioridades">Considerar</button>
+          <button type="button" class="portfolio-ignore-btn is-restore" data-portfolio-consider="${escapeHtml(c.codigo)}" title="Voltar a considerar no roteiro e nas prioridades" aria-label="Considerar ${escapeHtml(c.nome)}">voltar</button>
         </li>
       `;
     }).join("");
