@@ -1,5 +1,6 @@
 (() => {
   const RANK_FILE = "Mais vendidos Rocco.csv";
+  const COVER_PRICE_FILE = "precos-capa.csv";
   const IDLE_DAYS = 90;
   const IDLE_DAYS_LONG = 180;
   const TOP_SALDO_RANK = 150;
@@ -124,6 +125,7 @@
     seller: null,
     sellerPick: null,
     ranking: [],
+    coverPrices: new Map(),
     mapaRows: [],
     stockByKey: new Map(),
     stockLookup: new Map(),
@@ -547,8 +549,12 @@
     if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
     if (typeof value === "number" && Number.isFinite(value)) {
       const header = String(headerName || "").toLowerCase();
-      const forceFullDigits = /isbn|codbarra|codigo|cnpj|cpf|cep|inscricao/.test(header)
-        || Math.abs(value) >= 1e10;
+      // Nunca arredondar preço/percentual — mantém casas decimais do Excel.
+      const keepDecimals = /preco|preço|desconto|valor|percent|perc/.test(header);
+      const forceFullDigits = !keepDecimals && (
+        /isbn|codbarra|codigo|cnpj|cpf|cep|inscricao/.test(header)
+        || Math.abs(value) >= 1e10
+      );
       if (forceFullDigits) {
         return Math.abs(value) < 1e15
           ? String(Math.round(value))
@@ -748,6 +754,46 @@
     }
   }
 
+  async function loadCoverPrices() {
+    try {
+      const res = await fetch(encodeURI(COVER_PRICE_FILE));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buffer = await res.arrayBuffer();
+      const text = decodeCsvBuffer(buffer);
+      const rows = parseCsv(text);
+      const map = new Map();
+      rows.forEach((r) => {
+        const preco = parseNumber(r.preco);
+        if (preco == null) return;
+        isbnAliases(r.isbn).forEach((alias) => {
+          if (alias) map.set(alias, preco);
+        });
+      });
+      state.coverPrices = map;
+      if (state.selectedClient?.codigo && state.mapaRows.length) {
+        selectClient(state.selectedClient.codigo);
+      } else if (state.clients.length) {
+        invalidatePortfolioOverview();
+        render();
+      }
+    } catch (err) {
+      console.error(err);
+      state.coverPrices = new Map();
+    }
+  }
+
+  /** Preço de capa real do catálogo (quando houver); senão o valor do Mapão. */
+  function coverPriceForRow(row, fallback = parseNumber(row?.preco)) {
+    const aliases = [
+      ...isbnAliases(row?.isbn),
+      ...isbnAliases(row?.codbarra),
+    ];
+    for (const alias of aliases) {
+      if (alias && state.coverPrices.has(alias)) return state.coverPrices.get(alias);
+    }
+    return fallback;
+  }
+
   function buildClientStock(rows, clientCode) {
     const byKey = new Map();
     const lookup = new Map();
@@ -782,7 +828,7 @@
           isbn: reliable || "",
           titulo: r.titulo || "",
           titleKey,
-          preco: parseNumber(r.preco),
+          preco: coverPriceForRow(r),
           precoLiquido: null,
           fator: 1,
           consignado: 0,
@@ -793,7 +839,7 @@
         };
 
         const qty = parseIntSafe(r.consignado) || 0;
-        const preco = parseNumber(r.preco);
+        const preco = coverPriceForRow(r);
         const desconto = parseNumber(r.perdesconto) || 0;
         const fator = Math.max(0, 1 - desconto / 100);
 
@@ -933,7 +979,7 @@
       if (!code) return;
 
       const qty = parseIntSafe(r.consignado) || 0;
-      const preco = parseNumber(r.preco);
+      const preco = coverPriceForRow(r);
       const desconto = parseNumber(r.perdesconto) || 0;
       const fator = Math.max(0, 1 - desconto / 100);
       const valor = preco != null && qty ? preco * qty * fator : 0;
@@ -1168,7 +1214,7 @@
       if (!code) return;
 
       const qty = parseIntSafe(r.consignado) || 0;
-      const preco = parseNumber(r.preco);
+      const preco = coverPriceForRow(r);
       const desconto = parseNumber(r.perdesconto) || 0;
       const fator = Math.max(0, 1 - desconto / 100);
       const valor = preco != null && qty ? preco * qty * fator : 0;
@@ -3548,4 +3594,5 @@
 
   initSellerGate();
   loadRanking();
+  loadCoverPrices();
 })();
