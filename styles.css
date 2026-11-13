@@ -1342,23 +1342,10 @@ h1, h2, p { margin: 0; }
   color: inherit;
   cursor: pointer;
 }
-.portfolio-list > li > button[data-portfolio-chronic] {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  border: 0;
-  background: transparent;
-  border-radius: 8px;
-  padding: 8px 6px;
-  text-align: left;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-.portfolio-list > li > button[data-portfolio-chronic]:hover {
-  background: #fff;
+.portfolio-list-row.no-stock .portfolio-list-open {
+  grid-template-columns:
+    minmax(260px, 1.8fr)
+    minmax(160px, 0.8fr);
 }
 .portfolio-list .portfolio-item-main {
   display: grid;
@@ -1438,6 +1425,17 @@ button.portfolio-ignore-btn.is-restore:hover {
 }
 .portfolio-ignored {
   margin-top: 4px;
+}
+.portfolio-ignored-label {
+  margin: 12px 0 0;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.portfolio-ignored-label:first-child {
+  margin-top: 8px;
 }
 .portfolio-empty-note {
   margin: 10px 0 0;

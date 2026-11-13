@@ -15,6 +15,7 @@
   ];
   const SELLER_STORAGE_KEY = "rocco_estoque_vendedor";
   const IGNORED_ANALYSIS_STORAGE_KEY = "rocco_estoque_ignored_analysis";
+  const IGNORED_CHRONIC_STORAGE_KEY = "rocco_estoque_ignored_chronic";
 
   // URL do Apps Script (planilha de acessos).
   const ACCESS_LOG_URL = "https://script.google.com/macros/s/AKfycbwN9jd81SoPOJ5LuhA-e3PHld7Ql_On7hU2fG2LwZa6BKoODqHhMP6XmKHeeSbuzMeg/exec";
@@ -112,6 +113,9 @@
     portfolioIdle: document.getElementById("portfolioIdle"),
     portfolioIgnoredPanel: document.getElementById("portfolioIgnoredPanel"),
     portfolioIgnored: document.getElementById("portfolioIgnored"),
+    portfolioIgnoredChronic: document.getElementById("portfolioIgnoredChronic"),
+    portfolioIgnoredClientsWrap: document.getElementById("portfolioIgnoredClientsWrap"),
+    portfolioIgnoredChronicWrap: document.getElementById("portfolioIgnoredChronicWrap"),
     portfolioChronic: document.getElementById("portfolioChronic"),
   };
 
@@ -142,12 +146,13 @@
     mapaIsbnQuality: null,
     portfolioOverview: null,
     portfolioClientFilter: null,
-    ignoredAnalysisClients: loadIgnoredAnalysisClients(),
+    ignoredAnalysisClients: loadIgnoredSet(IGNORED_ANALYSIS_STORAGE_KEY),
+    ignoredChronicTitles: loadIgnoredSet(IGNORED_CHRONIC_STORAGE_KEY),
   };
 
-  function loadIgnoredAnalysisClients() {
+  function loadIgnoredSet(storageKey) {
     try {
-      const raw = sessionStorage.getItem(IGNORED_ANALYSIS_STORAGE_KEY);
+      const raw = sessionStorage.getItem(storageKey);
       const list = raw ? JSON.parse(raw) : [];
       return new Set(Array.isArray(list) ? list.map((c) => String(c)) : []);
     } catch (err) {
@@ -155,12 +160,9 @@
     }
   }
 
-  function persistIgnoredAnalysisClients() {
+  function persistIgnoredSet(storageKey, set) {
     try {
-      sessionStorage.setItem(
-        IGNORED_ANALYSIS_STORAGE_KEY,
-        JSON.stringify([...state.ignoredAnalysisClients])
-      );
+      sessionStorage.setItem(storageKey, JSON.stringify([...set]));
     } catch (err) {
       // ignore storage errors
     }
@@ -170,7 +172,7 @@
     const key = String(code || "").trim();
     if (!key) return;
     state.ignoredAnalysisClients.add(key);
-    persistIgnoredAnalysisClients();
+    persistIgnoredSet(IGNORED_ANALYSIS_STORAGE_KEY, state.ignoredAnalysisClients);
     render();
   }
 
@@ -178,7 +180,23 @@
     const key = String(code || "").trim();
     if (!key) return;
     state.ignoredAnalysisClients.delete(key);
-    persistIgnoredAnalysisClients();
+    persistIgnoredSet(IGNORED_ANALYSIS_STORAGE_KEY, state.ignoredAnalysisClients);
+    render();
+  }
+
+  function ignoreChronicTitle(key) {
+    const id = String(key || "").trim();
+    if (!id) return;
+    state.ignoredChronicTitles.add(id);
+    persistIgnoredSet(IGNORED_CHRONIC_STORAGE_KEY, state.ignoredChronicTitles);
+    render();
+  }
+
+  function considerChronicTitle(key) {
+    const id = String(key || "").trim();
+    if (!id) return;
+    state.ignoredChronicTitles.delete(id);
+    persistIgnoredSet(IGNORED_CHRONIC_STORAGE_KEY, state.ignoredChronicTitles);
     render();
   }
 
@@ -186,6 +204,13 @@
     const ignored = state.ignoredAnalysisClients;
     return (rows || [])
       .filter((c) => !ignored.has(String(c.codigo)))
+      .slice(0, PORTFOLIO_LIST_LIMIT);
+  }
+
+  function visibleChronicTitles(rows) {
+    const ignored = state.ignoredChronicTitles;
+    return (rows || [])
+      .filter((t) => !ignored.has(String(t.key)))
       .slice(0, PORTFOLIO_LIST_LIMIT);
   }
 
@@ -1947,12 +1972,11 @@
     const chronicAll = [...titleRupture.values()]
       .filter((t) => t.storeCount >= minChronicStores)
       .sort((a, b) => b.storeCount - a.storeCount || (a.ranking || 0) - (b.ranking || 0));
-    const chronicTitles = chronicAll
-      .slice(0, PORTFOLIO_LIST_LIMIT)
-      .map((t) => ({
-        ...t,
-        storePct: clientCount ? Math.round((t.storeCount / clientCount) * 100) : 0,
-      }));
+    // Lista completa: o recorte e títulos ignorados entram só na renderização.
+    const chronicTitles = chronicAll.map((t) => ({
+      ...t,
+      storePct: clientCount ? Math.round((t.storeCount / clientCount) * 100) : 0,
+    }));
 
     const byName = (a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
     // Listas completas: o recorte (e lojas desconsideradas) é aplicado só na renderização
@@ -2067,7 +2091,7 @@
     return `${isbns.toLocaleString("pt-BR")} isbns consignados - volume total de ${volume.toLocaleString("pt-BR")} ex.`;
   }
 
-  function renderPortfolioClientList(target, rows, valueFn, { ignorable = false } = {}) {
+  function renderPortfolioClientList(target, rows, valueFn, { ignorable = false, showStock = true } = {}) {
     if (!target) return;
     if (!rows.length) {
       target.innerHTML = `<li><p class="portfolio-empty-note">Nenhum cliente neste recorte.</p></li>`;
@@ -2079,14 +2103,17 @@
       const ignoreBtn = ignorable
         ? `<button type="button" class="portfolio-ignore-btn" data-portfolio-ignore="${escapeHtml(c.codigo)}" title="Tirar esta loja do roteiro e das prioridades" aria-label="Desconsiderar ${escapeHtml(c.nome)}">Ignorar</button>`
         : "";
+      const stock = showStock
+        ? `<span class="portfolio-item-stock" title="ISBNs com saldo e volume total consignado no Mapão deste cliente">${escapeHtml(portfolioStockLabel(c))}</span>`
+        : "";
       return `
-        <li class="portfolio-list-row">
+        <li class="portfolio-list-row${showStock ? "" : " no-stock"}">
           <button type="button" class="portfolio-list-open" data-portfolio-client="${escapeHtml(c.codigo)}">
             <span class="portfolio-item-main">
               <strong>${escapeHtml(c.nome)}</strong>
               <span>${escapeHtml(meta || c.codigo)}</span>
             </span>
-            <span class="portfolio-item-stock" title="ISBNs com saldo e volume total consignado no Mapão deste cliente">${escapeHtml(portfolioStockLabel(c))}</span>
+            ${stock}
             <em class="portfolio-item-metric">${escapeHtml(valueFn(c))}</em>
           </button>
           ${ignoreBtn}
@@ -2096,45 +2123,82 @@
   }
 
   function renderIgnoredAnalysisList(overview) {
-    if (!els.portfolioIgnoredPanel || !els.portfolioIgnored) return;
-    const ignored = state.ignoredAnalysisClients;
-    if (!ignored.size) {
+    if (!els.portfolioIgnoredPanel) return;
+    const ignoredClients = state.ignoredAnalysisClients;
+    const ignoredChronic = state.ignoredChronicTitles;
+    const hasClients = ignoredClients.size > 0;
+    const hasChronic = ignoredChronic.size > 0;
+
+    if (!hasClients && !hasChronic) {
       els.portfolioIgnoredPanel.hidden = true;
-      els.portfolioIgnored.innerHTML = "";
+      if (els.portfolioIgnored) els.portfolioIgnored.innerHTML = "";
+      if (els.portfolioIgnoredChronic) els.portfolioIgnoredChronic.innerHTML = "";
       return;
     }
-    const rows = (overview.clientRows || []).filter((c) => ignored.has(String(c.codigo)));
-    // Códigos órfãos (mapa antigo) ainda aparecem para poder reverter.
-    const known = new Set(rows.map((c) => String(c.codigo)));
-    ignored.forEach((code) => {
-      if (known.has(code)) return;
-      rows.push({ codigo: code, nome: code, cidade: "", estado: "", pctStock: null, rupture: null, valorParado: null });
-    });
-    rows.sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
+
     els.portfolioIgnoredPanel.hidden = false;
-    els.portfolioIgnored.innerHTML = rows.map((c) => {
-      const place = [c.cidade, c.estado].filter(Boolean).join("/");
-      const meta = [c.codigo, place].filter(Boolean).join(" · ");
-      const detail = c.pctStock == null
-        ? "desconsiderada na análise"
-        : `cobertura ${c.pctStock}% · ${Number(c.rupture || 0).toLocaleString("pt-BR")} títulos faltando do top 150`;
-      const stock = c.pctStock == null
-        ? `<span class="portfolio-item-stock">—</span>`
-        : `<span class="portfolio-item-stock">${escapeHtml(portfolioStockLabel(c))}</span>`;
-      return `
-        <li class="portfolio-list-row is-ignored">
-          <button type="button" class="portfolio-list-open" data-portfolio-client="${escapeHtml(c.codigo)}">
-            <span class="portfolio-item-main">
-              <strong>${escapeHtml(c.nome)}</strong>
-              <span>${escapeHtml(meta || c.codigo)}</span>
-            </span>
-            ${stock}
-            <em class="portfolio-item-metric">${escapeHtml(detail)}</em>
-          </button>
-          <button type="button" class="portfolio-ignore-btn is-restore" data-portfolio-consider="${escapeHtml(c.codigo)}" title="Voltar a considerar no roteiro e nas prioridades" aria-label="Considerar ${escapeHtml(c.nome)}">Voltar</button>
-        </li>
-      `;
-    }).join("");
+
+    if (els.portfolioIgnoredClientsWrap) els.portfolioIgnoredClientsWrap.hidden = !hasClients;
+    if (els.portfolioIgnored && hasClients) {
+      const rows = (overview.clientRows || []).filter((c) => ignoredClients.has(String(c.codigo)));
+      const known = new Set(rows.map((c) => String(c.codigo)));
+      ignoredClients.forEach((code) => {
+        if (known.has(code)) return;
+        rows.push({ codigo: code, nome: code, cidade: "", estado: "", pctStock: null, rupture: null, valorParado: null });
+      });
+      rows.sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
+      els.portfolioIgnored.innerHTML = rows.map((c) => {
+        const place = [c.cidade, c.estado].filter(Boolean).join("/");
+        const meta = [c.codigo, place].filter(Boolean).join(" · ");
+        const detail = c.pctStock == null
+          ? "desconsiderada na análise"
+          : `cobertura ${c.pctStock}% do top 150`;
+        return `
+          <li class="portfolio-list-row is-ignored no-stock">
+            <button type="button" class="portfolio-list-open" data-portfolio-client="${escapeHtml(c.codigo)}">
+              <span class="portfolio-item-main">
+                <strong>${escapeHtml(c.nome)}</strong>
+                <span>${escapeHtml(meta || c.codigo)}</span>
+              </span>
+              <em class="portfolio-item-metric">${escapeHtml(detail)}</em>
+            </button>
+            <button type="button" class="portfolio-ignore-btn is-restore" data-portfolio-consider="${escapeHtml(c.codigo)}" title="Voltar a considerar no roteiro e nas prioridades" aria-label="Considerar ${escapeHtml(c.nome)}">Voltar</button>
+          </li>
+        `;
+      }).join("");
+    } else if (els.portfolioIgnored) {
+      els.portfolioIgnored.innerHTML = "";
+    }
+
+    if (els.portfolioIgnoredChronicWrap) els.portfolioIgnoredChronicWrap.hidden = !hasChronic;
+    if (els.portfolioIgnoredChronic && hasChronic) {
+      const rows = (overview.chronicTitles || []).filter((t) => ignoredChronic.has(String(t.key)));
+      const known = new Set(rows.map((t) => String(t.key)));
+      ignoredChronic.forEach((key) => {
+        if (known.has(key)) return;
+        rows.push({ key, isbn: key, titulo: key, storeCount: null, storePct: null });
+      });
+      rows.sort((a, b) => String(a.titulo || "").localeCompare(String(b.titulo || ""), "pt-BR"));
+      els.portfolioIgnoredChronic.innerHTML = rows.map((t) => {
+        const detail = t.storeCount == null
+          ? "desconsiderado na análise"
+          : `sem saldo em ${t.storeCount.toLocaleString("pt-BR")} lojas (${t.storePct}%)`;
+        return `
+          <li class="portfolio-list-row is-ignored no-stock">
+            <button type="button" class="portfolio-list-open" data-portfolio-chronic="${escapeHtml(t.key)}" data-isbn="${escapeHtml(t.isbn || "")}" data-titulo="${escapeHtml(t.titulo || "")}">
+              <span class="portfolio-item-main">
+                <strong>${escapeHtml(t.titulo || t.isbn || "Sem título")}</strong>
+                <span>${escapeHtml(t.isbn || "Sem ISBN")}${t.ranking != null ? ` · ranking ${t.ranking}` : ""}</span>
+              </span>
+              <em class="portfolio-item-metric">${escapeHtml(detail)}</em>
+            </button>
+            <button type="button" class="portfolio-ignore-btn is-restore" data-portfolio-consider-chronic="${escapeHtml(t.key)}" title="Voltar a considerar nos títulos crônicos" aria-label="Considerar ${escapeHtml(t.titulo || t.isbn || "")}">Voltar</button>
+          </li>
+        `;
+      }).join("");
+    } else if (els.portfolioIgnoredChronic) {
+      els.portfolioIgnoredChronic.innerHTML = "";
+    }
   }
 
   function renderPortfolioOverview(overviewArg) {
@@ -2258,7 +2322,7 @@
     renderPortfolioClientList(
       els.portfolioRoteiro,
       visibleAnalysisRows(overview.roteiro),
-      (c) => `cobertura ${c.pctStock}%, ${c.rupture.toLocaleString("pt-BR")} títulos faltando do top 150`,
+      (c) => `cobertura ${c.pctStock}% do top 150`,
       { ignorable: true }
     );
     renderPortfolioClientList(
@@ -2276,24 +2340,30 @@
     renderPortfolioClientList(
       els.portfolioIdle,
       visibleAnalysisRows(overview.mostIdleValue),
-      (c) => money(c.valorParado),
-      { ignorable: true }
+      (c) => `valor parado ${money(c.valorParado)}`,
+      { ignorable: true, showStock: false }
     );
     renderIgnoredAnalysisList(overview);
 
     if (els.portfolioChronic) {
-      if (!overview.chronicTitles.length) {
-        els.portfolioChronic.innerHTML = `<li><p class="portfolio-empty-note">Nenhum título do Top 150 está sem saldo em pelo menos ${CHRONIC_STORE_PCT}% das lojas.</p></li>`;
+      const chronicVisible = visibleChronicTitles(overview.chronicTitles);
+      if (!chronicVisible.length) {
+        els.portfolioChronic.innerHTML = `<li><p class="portfolio-empty-note">${
+          overview.chronicTitles.length
+            ? "Todos os títulos crônicos deste recorte foram ignorados."
+            : `Nenhum título do Top 150 está sem saldo em pelo menos ${CHRONIC_STORE_PCT}% das lojas.`
+        }</p></li>`;
       } else {
-        els.portfolioChronic.innerHTML = overview.chronicTitles.map((t) => `
-          <li>
-            <button type="button" data-portfolio-chronic="${escapeHtml(t.key)}" data-isbn="${escapeHtml(t.isbn || "")}" data-titulo="${escapeHtml(t.titulo || "")}">
+        els.portfolioChronic.innerHTML = chronicVisible.map((t) => `
+          <li class="portfolio-list-row no-stock">
+            <button type="button" class="portfolio-list-open" data-portfolio-chronic="${escapeHtml(t.key)}" data-isbn="${escapeHtml(t.isbn || "")}" data-titulo="${escapeHtml(t.titulo || "")}">
               <span class="portfolio-item-main">
                 <strong>${escapeHtml(t.titulo || t.isbn || "Sem título")}</strong>
                 <span>${escapeHtml(t.isbn || "Sem ISBN")}${t.ranking != null ? ` · ranking ${t.ranking}` : ""}</span>
               </span>
-              <em>sem saldo em ${t.storeCount.toLocaleString("pt-BR")} lojas (${t.storePct}%)</em>
+              <em class="portfolio-item-metric">sem saldo em ${t.storeCount.toLocaleString("pt-BR")} lojas (${t.storePct}%)</em>
             </button>
+            <button type="button" class="portfolio-ignore-btn" data-portfolio-ignore-chronic="${escapeHtml(t.key)}" title="Ignorar este título e ver o próximo" aria-label="Ignorar ${escapeHtml(t.titulo || t.isbn || "")}">Ignorar</button>
           </li>
         `).join("");
       }
@@ -2825,6 +2895,18 @@
 
   if (els.portfolioOverview) {
     els.portfolioOverview.addEventListener("click", (e) => {
+      const ignoreChronicBtn = e.target.closest("[data-portfolio-ignore-chronic]");
+      if (ignoreChronicBtn) {
+        ignoreChronicTitle(ignoreChronicBtn.dataset.portfolioIgnoreChronic);
+        return;
+      }
+
+      const considerChronicBtn = e.target.closest("[data-portfolio-consider-chronic]");
+      if (considerChronicBtn) {
+        considerChronicTitle(considerChronicBtn.dataset.portfolioConsiderChronic);
+        return;
+      }
+
       const ignoreBtn = e.target.closest("[data-portfolio-ignore]");
       if (ignoreBtn) {
         ignoreAnalysisClient(ignoreBtn.dataset.portfolioIgnore);

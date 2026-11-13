@@ -336,16 +336,23 @@
             </section>
           </div>
 
-          <section class="portfolio-panel portfolio-ignored" id="portfolioIgnoredPanel" hidden aria-labelledby="portfolioIgnoredTitle">
-            <h3 id="portfolioIgnoredTitle">Lojas desconsideradas na análise</h3>
-            <p class="portfolio-panel-sub">Fora do roteiro e das prioridades; continuam no overview e no Mapão.</p>
-            <ol class="portfolio-list" id="portfolioIgnored"></ol>
-          </section>
-
           <section class="portfolio-panel" aria-labelledby="portfolioChronicTitle">
             <h3 id="portfolioChronicTitle">Títulos crônicos na carteira</h3>
-            <p class="portfolio-panel-sub">Títulos do Top 150 sem saldo em pelo menos 30% das lojas. Clique para ver quem ainda tem o item.</p>
+            <p class="portfolio-panel-sub">Títulos do Top 150 sem saldo em pelo menos 30% das lojas. Clique para ver quem ainda tem o item. Ignore esgotados para ver o próximo.</p>
             <ol class="portfolio-list" id="portfolioChronic"></ol>
+          </section>
+
+          <section class="portfolio-panel portfolio-ignored" id="portfolioIgnoredPanel" hidden aria-labelledby="portfolioIgnoredTitle">
+            <h3 id="portfolioIgnoredTitle">Desconsiderados na análise</h3>
+            <p class="portfolio-panel-sub">Fora do roteiro, prioridades e títulos crônicos; continuam no overview e no Mapão.</p>
+            <div id="portfolioIgnoredClientsWrap" hidden>
+              <h4 class="portfolio-ignored-label">Lojas</h4>
+              <ol class="portfolio-list" id="portfolioIgnored"></ol>
+            </div>
+            <div id="portfolioIgnoredChronicWrap" hidden>
+              <h4 class="portfolio-ignored-label">Títulos crônicos</h4>
+              <ol class="portfolio-list" id="portfolioIgnoredChronic"></ol>
+            </div>
           </section>
         </div>
 
