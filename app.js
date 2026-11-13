@@ -93,6 +93,7 @@
     sumIdleValue: document.getElementById("sumIdleValue"),
     sumIdleMeta: document.getElementById("sumIdleMeta"),
     sumRestockValue: document.getElementById("sumRestockValue"),
+    sumRestockMeta: document.getElementById("sumRestockMeta"),
     filters: document.getElementById("filters"),
     emptyState: document.getElementById("emptyState"),
     emptyTitle: document.getElementById("emptyTitle"),
@@ -781,6 +782,8 @@
           titulo: r.titulo || "",
           titleKey,
           preco: parseNumber(r.preco),
+          precoLiquido: null,
+          fator: 1,
           consignado: 0,
           valorLiquido: 0,
           fdias: null,
@@ -804,6 +807,10 @@
           prev.fdias = prev.fdias == null ? fdias : Math.max(prev.fdias, fdias);
         }
         if (prev.preco == null) prev.preco = preco;
+        if (preco != null) {
+          prev.precoLiquido = preco * fator;
+          prev.fator = fator;
+        }
         if (!prev.titulo) prev.titulo = r.titulo || "";
         if (!prev.isbn && reliable) prev.isbn = reliable;
 
@@ -1748,7 +1755,9 @@
   }
 
   function rowMatchesSituationFilter(row) {
-    if (state.filter === "ranking" && !row.inRanking) return false;
+    if (state.filter === "ranking") {
+      if (!row.inRanking || row.ranking == null || row.ranking > TOP_SALDO_RANK) return false;
+    }
     if (state.filter === "extra" && row.inRanking) return false;
     if (
       state.filter === "com"
@@ -1833,7 +1842,10 @@
     if ((stock.consignado || 0) > 0 && (stock.valorLiquido || 0) > 0) {
       return stock.valorLiquido / stock.consignado;
     }
-    return stock.preco == null ? null : stock.preco;
+    if (stock.precoLiquido != null) return stock.precoLiquido;
+    if (stock.preco == null) return null;
+    const fator = stock.fator == null ? 1 : stock.fator;
+    return stock.preco * fator;
   }
 
   // Itens do ranking que entram no cálculo de saldo/ruptura (Top 150).
@@ -2397,6 +2409,8 @@
     let rupture = 0;
     let valorParado = 0;
     let potencial = 0;
+    let potencialUnidades = 0;
+    let potencialTitulos = 0;
 
     rows.forEach((row) => {
       const stock = row.stock;
@@ -2408,17 +2422,20 @@
         if (!stock || saldo <= 0) {
           rupture += 1;
           urgent += 1;
-          const unit = unitNetPrice(stock);
-          if (unit != null) potencial += TARGET_OK_SALDO * unit;
         } else {
           withStock += 1;
+          if (row.sit?.key === "urgent" || saldo <= 3) urgent += 1;
+          else if (row.sit?.key === "alert" || saldo <= 7) alert += 1;
+        }
+
+        // Meta comercial: cada título do Top 150 com pelo menos 8 exemplares.
+        const gap = Math.max(TARGET_OK_SALDO - saldo, 0);
+        if (gap > 0) {
           const unit = unitNetPrice(stock);
-          if (saldo <= 3) {
-            urgent += 1;
-            if (unit != null) potencial += Math.max(TARGET_OK_SALDO - saldo, 0) * unit;
-          } else if (saldo <= 7) {
-            alert += 1;
-            if (unit != null) potencial += Math.max(TARGET_OK_SALDO - saldo, 0) * unit;
+          if (unit != null) {
+            potencial += gap * unit;
+            potencialUnidades += gap;
+            potencialTitulos += 1;
           }
         }
       } else if (row.sit?.key === "urgent") {
@@ -2461,11 +2478,16 @@
     els.sumIdleValue.textContent = money(valorParado);
     els.sumIdleMeta.textContent = `${idle180Count.toLocaleString("pt-BR")} ISBN(s) parados há 180+ dias`;
     els.sumRestockValue.textContent = money(potencial);
+    if (els.sumRestockMeta) {
+      els.sumRestockMeta.textContent = potencialTitulos
+        ? `${potencialUnidades.toLocaleString("pt-BR")} un. em ${potencialTitulos.toLocaleString("pt-BR")} título(s) do Top ${TOP_SALDO_RANK} abaixo de ${TARGET_OK_SALDO} un.`
+        : `Nenhum título do Top ${TOP_SALDO_RANK} abaixo de ${TARGET_OK_SALDO} un.`;
+    }
   }
 
   const FILTER_LABELS = {
     all: "Todos",
-    ranking: "Top 500",
+    ranking: "Top 150",
     extra: "Fora do ranking",
     com: "Com estoque",
     sem: "Sem estoque",
@@ -2515,7 +2537,7 @@
           ${state.sellerFilter ? `<li><strong>Vendedor do Mapão</strong>${escapeHtml(state.sellerFilter)}</li>` : ""}
           ${state.portfolioClientFilter ? `<li><strong>Filtro carteira</strong>${escapeHtml(portfolioFilterLabel(state.portfolioClientFilter))}</li>` : ""}
           <li><strong>Cliente</strong>${client ? `${escapeHtml(client.codigo)} · ${escapeHtml(client.nome)}` : "Nenhum"}</li>
-          <li><strong>Base</strong>Mais vendidos Rocco (Top 500)</li>
+          <li><strong>Base</strong>Mais vendidos Rocco · recorte Top ${TOP_SALDO_RANK}</li>
           <li><strong>Filtro da tabela</strong>${escapeHtml(filterLabel)}</li>
           <li><strong>Busca de título</strong>${searchLabel ? escapeHtml(searchLabel) : "Nenhuma"}</li>
         `;
