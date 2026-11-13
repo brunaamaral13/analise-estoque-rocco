@@ -1955,13 +1955,14 @@
       return;
     }
     target.innerHTML = rows.map((c) => {
-      const place = [c.cidade, c.estado].filter(Boolean).join("/") || c.codigo;
+      const place = [c.cidade, c.estado].filter(Boolean).join("/");
+      const meta = [c.codigo, place].filter(Boolean).join(" · ");
       return `
         <li>
           <button type="button" data-portfolio-client="${escapeHtml(c.codigo)}">
             <span class="portfolio-item-main">
               <strong>${escapeHtml(c.nome)}</strong>
-              <span>${escapeHtml(place)}</span>
+              <span>${escapeHtml(meta || c.codigo)}</span>
             </span>
             <em>${escapeHtml(valueFn(c))}</em>
           </button>
