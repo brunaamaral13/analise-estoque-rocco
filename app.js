@@ -8,10 +8,10 @@
   const CHRONIC_STORE_PCT = 30;
   const PORTFOLIO_LIST_LIMIT = 5;
   const COVERAGE_BANDS = [
-    { key: "lt50", label: "< 50%", min: 0, max: 49, fillClass: "is-down" },
-    { key: "50_69", label: "50–69%", min: 50, max: 69, fillClass: "" },
-    { key: "70_89", label: "70–89%", min: 70, max: 89, fillClass: "" },
-    { key: "ge90", label: "≥ 90%", min: 90, max: 100, fillClass: "is-ok" },
+    { key: "lt50", label: "abaixo de 50%", min: 0, max: 49, fillClass: "is-down" },
+    { key: "50_69", label: "de 50% a 69%", min: 50, max: 69, fillClass: "" },
+    { key: "70_89", label: "de 70% a 89%", min: 70, max: 89, fillClass: "" },
+    { key: "ge90", label: "a partir de 90%", min: 90, max: 100, fillClass: "is-ok" },
   ];
   const SELLER_STORAGE_KEY = "rocco_estoque_vendedor";
 
@@ -1899,9 +1899,11 @@
       const band = COVERAGE_BANDS.find((b) => b.key === filter.key);
       return band ? `Cobertura ${band.label}` : "Faixa de cobertura";
     }
-    if (filter.type === "below50") return "Cobertura < 50%";
-    if (filter.type === "ge90") return "Cobertura ≥ 90%";
-    if (filter.type === "highRupture") return `Alta ruptura (≥ ${HIGH_RUPTURE_PCT}%)`;
+    if (filter.type === "below50") return "Cobertura abaixo de 50%";
+    if (filter.type === "ge90") return "Cobertura a partir de 90%";
+    if (filter.type === "highRupture") {
+      return `Alta ruptura (a partir de ${HIGH_RUPTURE_PCT}% do Top 150 sem saldo)`;
+    }
     return "Filtro da carteira";
   }
 
@@ -1981,16 +1983,16 @@
 
     const filter = state.portfolioClientFilter;
     const filterActive = Boolean(filter);
-    const sellerLabel = state.sellerFilter ? ` · ${state.sellerFilter}` : "";
+    const sellerLabel = state.sellerFilter ? ` — ${state.sellerFilter}` : "";
     if (els.portfolioTitle) {
-      els.portfolioTitle.textContent = `Visão geral · carteira${sellerLabel}`;
+      els.portfolioTitle.textContent = `Visão geral da carteira${sellerLabel}`;
     }
     if (els.portfolioScope) {
       const clientsLabel = `${overview.clientCount.toLocaleString("pt-BR")} cliente(s)`;
-      const sellerScope = state.sellerFilter ? ` · vendedor ${state.sellerFilter}` : "";
+      const sellerScope = state.sellerFilter ? `, vendedor ${state.sellerFilter}` : "";
       els.portfolioScope.textContent = filterActive
-        ? `${clientsLabel}${sellerScope} · filtro: ${portfolioFilterLabel(filter)}`
-        : `${clientsLabel}${sellerScope} · base Mais vendidos · Top ${TOP_SALDO_RANK}`;
+        ? `${clientsLabel}${sellerScope}. Filtro: ${portfolioFilterLabel(filter)}`
+        : `${clientsLabel}${sellerScope}. Base: mais vendidos Rocco (Top ${TOP_SALDO_RANK})`;
     }
     if (els.btnClearPortfolioFilter) {
       els.btnClearPortfolioFilter.hidden = !filterActive;
@@ -2002,27 +2004,29 @@
           key: "clients",
           label: "Clientes na carteira",
           value: overview.clientCount.toLocaleString("pt-BR"),
-          meta: state.sellerFilter ? `Vendedor ${state.sellerFilter}` : "Mapão importado",
+          meta: state.sellerFilter
+            ? `Lojas do vendedor ${state.sellerFilter} neste Mapão`
+            : "Total de lojas neste Mapão",
         },
         {
           key: "avg",
-          label: "Cobertura média Top 150",
+          label: "Cobertura média do Top 150",
           value: `${overview.avgCoverage}%`,
-          meta: "Média das lojas com saldo",
+          meta: "Em média, quanto do Top 150 as lojas têm em estoque",
         },
         {
           key: "below50",
-          label: "Cobertura < 50%",
+          label: "Cobertura abaixo de 50%",
           value: overview.below50Count.toLocaleString("pt-BR"),
-          meta: "Clientes fracos no Top 150",
+          meta: "Lojas com menos da metade do Top 150 em estoque",
           tone: "is-warn",
           filter: { type: "below50" },
         },
         {
           key: "ge90",
-          label: "Cobertura ≥ 90%",
+          label: "Cobertura a partir de 90%",
           value: overview.ge90Count.toLocaleString("pt-BR"),
-          meta: "Lojas bem cobertas",
+          meta: "Lojas com quase todo o Top 150 em estoque",
           tone: "is-ok",
           filter: { type: "ge90" },
         },
@@ -2030,7 +2034,7 @@
           key: "highRupture",
           label: "Alta ruptura",
           value: overview.highRuptureCount.toLocaleString("pt-BR"),
-          meta: `≥ ${HIGH_RUPTURE_PCT}% do Top 150 sem saldo`,
+          meta: `Lojas com pelo menos ${HIGH_RUPTURE_PCT}% do Top 150 sem saldo`,
           tone: "is-alert",
           filter: { type: "highRupture" },
         },
@@ -2073,15 +2077,15 @@
     if (els.portfolioOpp) {
       els.portfolioOpp.innerHTML = `
         <div>
-          <dt>Potencial de reposição</dt>
+          <dt>Potencial de reposição no Top 150 (até saldo 8)</dt>
           <dd>${money(overview.potencial)}</dd>
         </div>
         <div>
-          <dt>Valor parado 180+ dias</dt>
+          <dt>Valor parado há 180 dias ou mais</dt>
           <dd>${money(overview.valorParado)}</dd>
         </div>
         <div>
-          <dt>Títulos Top 150 em ruptura em ≥ ${CHRONIC_STORE_PCT}% das lojas</dt>
+          <dt>Títulos do Top 150 sem saldo em pelo menos ${CHRONIC_STORE_PCT}% das lojas</dt>
           <dd>${overview.chronicTitleCount.toLocaleString("pt-BR")} títulos</dd>
         </div>
       `;
@@ -2090,17 +2094,17 @@
     renderPortfolioClientList(
       els.portfolioRoteiro,
       overview.roteiro,
-      (c) => `${c.pctStock}% · ${c.rupture} faltando`
+      (c) => `cobertura ${c.pctStock}%, ${c.rupture.toLocaleString("pt-BR")} títulos faltando`
     );
     renderPortfolioClientList(
       els.portfolioWorst,
       overview.worstCoverage,
-      (c) => `${c.pctStock}%`
+      (c) => `cobertura ${c.pctStock}%`
     );
     renderPortfolioClientList(
       els.portfolioRupture,
       overview.mostRupture,
-      (c) => `${c.rupture.toLocaleString("pt-BR")} faltando`
+      (c) => `${c.rupture.toLocaleString("pt-BR")} títulos do Top 150 sem saldo`
     );
     renderPortfolioClientList(
       els.portfolioIdle,
@@ -2110,16 +2114,16 @@
 
     if (els.portfolioChronic) {
       if (!overview.chronicTitles.length) {
-        els.portfolioChronic.innerHTML = `<li><p class="portfolio-empty-note">Nenhum título do Top 150 em ruptura em ≥ ${CHRONIC_STORE_PCT}% das lojas.</p></li>`;
+        els.portfolioChronic.innerHTML = `<li><p class="portfolio-empty-note">Nenhum título do Top 150 está sem saldo em pelo menos ${CHRONIC_STORE_PCT}% das lojas.</p></li>`;
       } else {
         els.portfolioChronic.innerHTML = overview.chronicTitles.map((t) => `
           <li>
             <button type="button" data-portfolio-chronic="${escapeHtml(t.key)}" data-isbn="${escapeHtml(t.isbn || "")}" data-titulo="${escapeHtml(t.titulo || "")}">
               <span class="portfolio-item-main">
                 <strong>${escapeHtml(t.titulo || t.isbn || "Sem título")}</strong>
-                <span>${escapeHtml(t.isbn || "Sem ISBN")}${t.ranking != null ? ` · #${t.ranking}` : ""}</span>
+                <span>${escapeHtml(t.isbn || "Sem ISBN")}${t.ranking != null ? ` · ranking ${t.ranking}` : ""}</span>
               </span>
-              <em>${t.storeCount.toLocaleString("pt-BR")} lojas (${t.storePct}%)</em>
+              <em>sem saldo em ${t.storeCount.toLocaleString("pt-BR")} lojas (${t.storePct}%)</em>
             </button>
           </li>
         `).join("");

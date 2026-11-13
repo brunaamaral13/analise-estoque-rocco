@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Outfit:wght@360;460;560;650&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261112codcliente">
+  <link rel="stylesheet" href="styles.css?v=20261112textokpi">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b5191a'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -288,8 +288,8 @@
         <div class="portfolio-overview" id="portfolioOverview" hidden>
           <div class="portfolio-head">
             <div>
-              <h2 id="portfolioTitle">Visão geral · carteira</h2>
-              <p class="portfolio-sub" id="portfolioSub">Antes de abrir um cliente: onde atacar na carteira com base no Top 150 Rocco.</p>
+              <h2 id="portfolioTitle">Visão geral da carteira</h2>
+              <p class="portfolio-sub" id="portfolioSub">Antes de abrir um cliente: veja onde atacar na carteira com base nos 150 mais vendidos da Rocco.</p>
             </div>
             <div class="portfolio-head-meta">
               <p class="portfolio-scope" id="portfolioScope">—</p>
@@ -301,44 +301,44 @@
 
           <div class="portfolio-mid">
             <section class="portfolio-panel" aria-labelledby="portfolioBandsTitle">
-              <h3 id="portfolioBandsTitle">Faixas de cobertura Top 150</h3>
-              <p class="portfolio-panel-sub">Clique numa faixa para filtrar o seletor de clientes</p>
+              <h3 id="portfolioBandsTitle">Faixas de cobertura do Top 150</h3>
+              <p class="portfolio-panel-sub">Quantas lojas estão em cada faixa. Clique para filtrar a lista de clientes.</p>
               <ul class="portfolio-bands" id="portfolioBands"></ul>
             </section>
             <section class="portfolio-panel" aria-labelledby="portfolioOppTitle">
               <h3 id="portfolioOppTitle">Oportunidade da carteira</h3>
-              <p class="portfolio-panel-sub">Agregado · Top 150</p>
+              <p class="portfolio-panel-sub">Totais somados das lojas, olhando o Top 150</p>
               <dl class="portfolio-opp" id="portfolioOpp"></dl>
             </section>
           </div>
 
           <section class="portfolio-panel portfolio-roteiro" aria-labelledby="portfolioRoteiroTitle">
             <h3 id="portfolioRoteiroTitle">Roteiro do dia da carteira</h3>
-            <p class="portfolio-panel-sub">Comece por estes clientes (pior cobertura + maior ruptura)</p>
+            <p class="portfolio-panel-sub">Comece por estas lojas: pior cobertura e mais títulos faltando no Top 150</p>
             <ol class="portfolio-list" id="portfolioRoteiro"></ol>
           </section>
 
           <div class="portfolio-lists">
             <section class="portfolio-panel" aria-labelledby="portfolioWorstTitle">
-              <h3 id="portfolioWorstTitle">Prioridade · pior cobertura Top 150</h3>
-              <p class="portfolio-panel-sub">Clique para abrir o cliente</p>
+              <h3 id="portfolioWorstTitle">Prioridade: pior cobertura do Top 150</h3>
+              <p class="portfolio-panel-sub">Lojas que têm menos títulos do Top 150 em estoque. Clique para abrir.</p>
               <ol class="portfolio-list" id="portfolioWorst"></ol>
             </section>
             <section class="portfolio-panel" aria-labelledby="portfolioRuptureTitle">
-              <h3 id="portfolioRuptureTitle">Prioridade · maior ruptura</h3>
-              <p class="portfolio-panel-sub">Top 150 sem saldo</p>
+              <h3 id="portfolioRuptureTitle">Prioridade: maior ruptura</h3>
+              <p class="portfolio-panel-sub">Lojas com mais títulos do Top 150 sem saldo. Clique para abrir.</p>
               <ol class="portfolio-list" id="portfolioRupture"></ol>
             </section>
             <section class="portfolio-panel" aria-labelledby="portfolioIdleTitle">
-              <h3 id="portfolioIdleTitle">Prioridade · valor parado 180+</h3>
-              <p class="portfolio-panel-sub">Candidatos a devolução</p>
+              <h3 id="portfolioIdleTitle">Prioridade: valor parado há 180 dias ou mais</h3>
+              <p class="portfolio-panel-sub">Candidatos a devolução. Clique para abrir o cliente.</p>
               <ol class="portfolio-list" id="portfolioIdle"></ol>
             </section>
           </div>
 
           <section class="portfolio-panel" aria-labelledby="portfolioChronicTitle">
             <h3 id="portfolioChronicTitle">Títulos crônicos na carteira</h3>
-            <p class="portfolio-panel-sub">Top 150 em ruptura em ≥ 30% das lojas · clique para ver quem tem o item</p>
+            <p class="portfolio-panel-sub">Títulos do Top 150 sem saldo em pelo menos 30% das lojas. Clique para ver quem ainda tem o item.</p>
             <ol class="portfolio-list" id="portfolioChronic"></ol>
           </section>
         </div>
@@ -363,6 +363,6 @@
   </div>
 
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="app.js?v=20261112codcliente"></script>
+  <script src="app.js?v=20261112textokpi"></script>
 </body>
 </html>

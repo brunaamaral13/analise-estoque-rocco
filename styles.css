@@ -1230,7 +1230,7 @@ h1, h2, p { margin: 0; }
 .portfolio-band {
   width: 100%;
   display: grid;
-  grid-template-columns: 58px 1fr 28px;
+  grid-template-columns: 110px 1fr 28px;
   gap: 8px;
   align-items: center;
   border: 1px solid transparent;
