@@ -14,6 +14,7 @@
     { key: "ge90", label: "a partir de 90%", min: 90, max: 100, fillClass: "is-ok" },
   ];
   const SELLER_STORAGE_KEY = "rocco_estoque_vendedor";
+  const IGNORED_ANALYSIS_STORAGE_KEY = "rocco_estoque_ignored_analysis";
 
   // URL do Apps Script (planilha de acessos).
   const ACCESS_LOG_URL = "https://script.google.com/macros/s/AKfycbwN9jd81SoPOJ5LuhA-e3PHld7Ql_On7hU2fG2LwZa6BKoODqHhMP6XmKHeeSbuzMeg/exec";
@@ -109,6 +110,8 @@
     portfolioWorst: document.getElementById("portfolioWorst"),
     portfolioRupture: document.getElementById("portfolioRupture"),
     portfolioIdle: document.getElementById("portfolioIdle"),
+    portfolioIgnoredPanel: document.getElementById("portfolioIgnoredPanel"),
+    portfolioIgnored: document.getElementById("portfolioIgnored"),
     portfolioChronic: document.getElementById("portfolioChronic"),
   };
 
@@ -139,7 +142,52 @@
     mapaIsbnQuality: null,
     portfolioOverview: null,
     portfolioClientFilter: null,
+    ignoredAnalysisClients: loadIgnoredAnalysisClients(),
   };
+
+  function loadIgnoredAnalysisClients() {
+    try {
+      const raw = sessionStorage.getItem(IGNORED_ANALYSIS_STORAGE_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(list) ? list.map((c) => String(c)) : []);
+    } catch (err) {
+      return new Set();
+    }
+  }
+
+  function persistIgnoredAnalysisClients() {
+    try {
+      sessionStorage.setItem(
+        IGNORED_ANALYSIS_STORAGE_KEY,
+        JSON.stringify([...state.ignoredAnalysisClients])
+      );
+    } catch (err) {
+      // ignore storage errors
+    }
+  }
+
+  function ignoreAnalysisClient(code) {
+    const key = String(code || "").trim();
+    if (!key) return;
+    state.ignoredAnalysisClients.add(key);
+    persistIgnoredAnalysisClients();
+    render();
+  }
+
+  function considerAnalysisClient(code) {
+    const key = String(code || "").trim();
+    if (!key) return;
+    state.ignoredAnalysisClients.delete(key);
+    persistIgnoredAnalysisClients();
+    render();
+  }
+
+  function visibleAnalysisRows(rows) {
+    const ignored = state.ignoredAnalysisClients;
+    return (rows || [])
+      .filter((c) => !ignored.has(String(c.codigo)))
+      .slice(0, PORTFOLIO_LIST_LIMIT);
+  }
 
   function logSellerAccess(vendedor) {
     if (!ACCESS_LOG_URL || !vendedor) return;
@@ -735,6 +783,12 @@
     return String(row?.vendedor || row?.["vendedor "] || "").trim();
   }
 
+  function rowMatchesSellerFilter(row) {
+    const seller = normalizeSearch(state.sellerFilter);
+    if (!seller) return true;
+    return normalizeSearch(rowSellerName(row)) === seller;
+  }
+
   function listClients(rows) {
     const byCode = new Map();
     rows.forEach((r) => {
@@ -898,6 +952,7 @@
     }
 
     state.mapaRows.forEach((r) => {
+      if (!rowMatchesSellerFilter(r)) return;
       const qty = parseIntSafe(r.consignado) || 0;
       if (qty <= 0) return;
 
@@ -1888,18 +1943,16 @@
       }));
 
     const byName = (a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
+    // Listas completas: o recorte (e lojas desconsideradas) é aplicado só na renderização
+    // do roteiro/prioridades, sem afetar o overview geral.
     const worstCoverage = [...clientRows]
-      .sort((a, b) => a.pctStock - b.pctStock || b.rupture - a.rupture || byName(a, b))
-      .slice(0, PORTFOLIO_LIST_LIMIT);
+      .sort((a, b) => a.pctStock - b.pctStock || b.rupture - a.rupture || byName(a, b));
     const mostRupture = [...clientRows]
-      .sort((a, b) => b.rupture - a.rupture || a.pctStock - b.pctStock || byName(a, b))
-      .slice(0, PORTFOLIO_LIST_LIMIT);
+      .sort((a, b) => b.rupture - a.rupture || a.pctStock - b.pctStock || byName(a, b));
     const mostIdleValue = [...clientRows]
-      .sort((a, b) => b.valorParado - a.valorParado || byName(a, b))
-      .slice(0, PORTFOLIO_LIST_LIMIT);
+      .sort((a, b) => b.valorParado - a.valorParado || byName(a, b));
     const roteiro = [...clientRows]
-      .sort((a, b) => b.score - a.score || a.pctStock - b.pctStock || byName(a, b))
-      .slice(0, PORTFOLIO_LIST_LIMIT);
+      .sort((a, b) => b.score - a.score || a.pctStock - b.pctStock || byName(a, b));
 
     return {
       // Escopo do cache: vendedor do Mapão usado no cálculo.
@@ -1917,6 +1970,7 @@
       potencial: sumPotencial,
       valorParado: sumValorParado,
       chronicTitleCount: chronicAll.length,
+      clientRows,
       roteiro,
       worstCoverage,
       mostRupture,
@@ -1995,7 +2049,7 @@
     refreshSelectedProductResults();
   }
 
-  function renderPortfolioClientList(target, rows, valueFn) {
+  function renderPortfolioClientList(target, rows, valueFn, { ignorable = false } = {}) {
     if (!target) return;
     if (!rows.length) {
       target.innerHTML = `<li><p class="portfolio-empty-note">Nenhum cliente neste recorte.</p></li>`;
@@ -2004,15 +2058,57 @@
     target.innerHTML = rows.map((c) => {
       const place = [c.cidade, c.estado].filter(Boolean).join("/");
       const meta = [c.codigo, place].filter(Boolean).join(" · ");
+      const ignoreBtn = ignorable
+        ? `<button type="button" class="portfolio-ignore-btn" data-portfolio-ignore="${escapeHtml(c.codigo)}" title="Tirar esta loja do roteiro e das prioridades">Desconsiderar</button>`
+        : "";
       return `
-        <li>
-          <button type="button" data-portfolio-client="${escapeHtml(c.codigo)}">
+        <li class="portfolio-list-row">
+          <button type="button" class="portfolio-list-open" data-portfolio-client="${escapeHtml(c.codigo)}">
             <span class="portfolio-item-main">
               <strong>${escapeHtml(c.nome)}</strong>
               <span>${escapeHtml(meta || c.codigo)}</span>
             </span>
             <em>${escapeHtml(valueFn(c))}</em>
           </button>
+          ${ignoreBtn}
+        </li>
+      `;
+    }).join("");
+  }
+
+  function renderIgnoredAnalysisList(overview) {
+    if (!els.portfolioIgnoredPanel || !els.portfolioIgnored) return;
+    const ignored = state.ignoredAnalysisClients;
+    if (!ignored.size) {
+      els.portfolioIgnoredPanel.hidden = true;
+      els.portfolioIgnored.innerHTML = "";
+      return;
+    }
+    const rows = (overview.clientRows || []).filter((c) => ignored.has(String(c.codigo)));
+    // Códigos órfãos (mapa antigo) ainda aparecem para poder reverter.
+    const known = new Set(rows.map((c) => String(c.codigo)));
+    ignored.forEach((code) => {
+      if (known.has(code)) return;
+      rows.push({ codigo: code, nome: code, cidade: "", estado: "", pctStock: null, rupture: null, valorParado: null });
+    });
+    rows.sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
+    els.portfolioIgnoredPanel.hidden = false;
+    els.portfolioIgnored.innerHTML = rows.map((c) => {
+      const place = [c.cidade, c.estado].filter(Boolean).join("/");
+      const meta = [c.codigo, place].filter(Boolean).join(" · ");
+      const detail = c.pctStock == null
+        ? "desconsiderada na análise"
+        : `cobertura ${c.pctStock}% · ${Number(c.rupture || 0).toLocaleString("pt-BR")} faltando`;
+      return `
+        <li class="portfolio-list-row is-ignored">
+          <button type="button" class="portfolio-list-open" data-portfolio-client="${escapeHtml(c.codigo)}">
+            <span class="portfolio-item-main">
+              <strong>${escapeHtml(c.nome)}</strong>
+              <span>${escapeHtml(meta || c.codigo)}</span>
+            </span>
+            <em>${escapeHtml(detail)}</em>
+          </button>
+          <button type="button" class="portfolio-ignore-btn is-restore" data-portfolio-consider="${escapeHtml(c.codigo)}" title="Voltar a considerar no roteiro e nas prioridades">Considerar</button>
         </li>
       `;
     }).join("");
@@ -2138,24 +2234,29 @@
 
     renderPortfolioClientList(
       els.portfolioRoteiro,
-      overview.roteiro,
-      (c) => `cobertura ${c.pctStock}%, ${c.rupture.toLocaleString("pt-BR")} títulos faltando`
+      visibleAnalysisRows(overview.roteiro),
+      (c) => `cobertura ${c.pctStock}%, ${c.rupture.toLocaleString("pt-BR")} títulos faltando`,
+      { ignorable: true }
     );
     renderPortfolioClientList(
       els.portfolioWorst,
-      overview.worstCoverage,
-      (c) => `cobertura ${c.pctStock}%`
+      visibleAnalysisRows(overview.worstCoverage),
+      (c) => `cobertura ${c.pctStock}%`,
+      { ignorable: true }
     );
     renderPortfolioClientList(
       els.portfolioRupture,
-      overview.mostRupture,
-      (c) => `${c.rupture.toLocaleString("pt-BR")} títulos do Top 150 sem saldo`
+      visibleAnalysisRows(overview.mostRupture),
+      (c) => `${c.rupture.toLocaleString("pt-BR")} títulos do Top 150 sem saldo`,
+      { ignorable: true }
     );
     renderPortfolioClientList(
       els.portfolioIdle,
-      overview.mostIdleValue,
-      (c) => money(c.valorParado)
+      visibleAnalysisRows(overview.mostIdleValue),
+      (c) => money(c.valorParado),
+      { ignorable: true }
     );
+    renderIgnoredAnalysisList(overview);
 
     if (els.portfolioChronic) {
       if (!overview.chronicTitles.length) {
@@ -2701,6 +2802,18 @@
 
   if (els.portfolioOverview) {
     els.portfolioOverview.addEventListener("click", (e) => {
+      const ignoreBtn = e.target.closest("[data-portfolio-ignore]");
+      if (ignoreBtn) {
+        ignoreAnalysisClient(ignoreBtn.dataset.portfolioIgnore);
+        return;
+      }
+
+      const considerBtn = e.target.closest("[data-portfolio-consider]");
+      if (considerBtn) {
+        considerAnalysisClient(considerBtn.dataset.portfolioConsider);
+        return;
+      }
+
       const clientBtn = e.target.closest("[data-portfolio-client]");
       if (clientBtn) {
         selectClient(clientBtn.dataset.portfolioClient);
@@ -2847,6 +2960,17 @@
         state.isbnResult = findClientsBySelectedProducts(state.selectedProducts);
       }
       render();
+      if (!state.selectedClient && state.query.trim()) {
+        renderTitleResults(titleSuggestions(state.query));
+      }
+      if (state.isbnSearchOpen) {
+        if (state.isbnFieldQuery) {
+          renderProductFieldResults("isbn", filterProductCatalog("isbn", state.isbnFieldQuery));
+        }
+        if (state.titleFieldQuery) {
+          renderProductFieldResults("title", filterProductCatalog("title", state.titleFieldQuery));
+        }
+      }
     });
   }
   els.clientQuery.addEventListener("input", (e) => {
@@ -2918,6 +3042,7 @@
     const byKey = new Map();
 
     state.mapaRows.forEach((r) => {
+      if (!rowMatchesSellerFilter(r)) return;
       const qty = parseIntSafe(r.consignado) || 0;
       if (qty <= 0) return;
 
@@ -2927,21 +3052,22 @@
       const blob = `${r.titulo || ""} ${r.isbn || ""} ${r.codbarra || ""}`.toLowerCase();
       if (!matchIsbn && !matchTitle && !blob.includes(q)) return;
 
-      const isbn = [...isbnAliases(r.isbn), ...isbnAliases(r.codbarra)].find(isReliableIsbn)
-        || expandIsbnCandidate(r.isbn)
-        || expandIsbnCandidate(r.codbarra)
-        || "";
-      const key = isbn || titleKey || String(r.titulo || "").toLowerCase();
+      const isbn = reliableRowIsbn(r);
+      const codlivro = String(r.codlivro || "").trim();
+      // Mesma identidade do catálogo: ISBN confiável, senão código do livro, senão título.
+      const key = isbn
+        ? `isbn:${isbn}`
+        : (codlivro ? `cod:${codlivro}` : (titleKey || String(r.titulo || "").toLowerCase()));
       if (!key) return;
 
       const prev = byKey.get(key) || {
         titulo: r.titulo || "Sem título",
-        isbn,
+        isbn: isbn || "",
         volume: 0,
         clients: new Set(),
       };
       if (!prev.titulo && r.titulo) prev.titulo = r.titulo;
-      if (!prev.isbn && isbn) prev.isbn = isbn;
+      if (isbnQualityScore(isbn) > isbnQualityScore(prev.isbn)) prev.isbn = isbn;
       prev.volume += qty;
       const code = String(r.codigo || "").trim();
       if (code) prev.clients.add(code);
@@ -3027,14 +3153,16 @@
     }
 
     if (crossClient) {
+      const sellerHint = state.sellerFilter
+        ? ` no vendedor ${state.sellerFilter}`
+        : "";
       els.titleResults.innerHTML = `
-        <div class="title-results-head">${list.length.toLocaleString("pt-BR")} título(s) — clique para ver clientes com estoque</div>
+        <div class="title-results-head">${list.length.toLocaleString("pt-BR")} título(s)${escapeHtml(sellerHint)} — clique para ver clientes com estoque</div>
         ${list.map((item) => {
           const meta = [
-            item.isbn || "",
             `${item.clientCount.toLocaleString("pt-BR")} cliente(s)`,
             `Saldo ${item.volume.toLocaleString("pt-BR")}`,
-          ].filter(Boolean).join(" · ");
+          ].join(" · ");
           return `
             <button type="button" class="title-result" data-mode="clients" data-isbn="${escapeHtml(item.isbn || "")}" data-titulo="${escapeHtml(item.titulo || "")}" role="option">
               <strong>${escapeHtml(item.titulo || "Sem título")}</strong>

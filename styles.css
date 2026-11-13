@@ -1311,7 +1311,15 @@ h1, h2, p { margin: 0; }
 .portfolio-list li {
   margin: 0;
 }
-.portfolio-list button {
+.portfolio-list-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+.portfolio-list-open,
+.portfolio-list > li > button {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   display: flex;
   justify-content: space-between;
@@ -1326,8 +1334,12 @@ h1, h2, p { margin: 0; }
   color: inherit;
   cursor: pointer;
 }
-.portfolio-list button:hover {
+.portfolio-list-open:hover,
+.portfolio-list > li > button:hover {
   background: #fff;
+}
+.portfolio-list-row .portfolio-list-open {
+  width: auto;
 }
 .portfolio-list .portfolio-item-main {
   display: grid;
@@ -1351,6 +1363,43 @@ h1, h2, p { margin: 0; }
   font-size: 12px;
   color: var(--red-deep);
   white-space: nowrap;
+}
+.portfolio-ignore-btn {
+  flex: 0 0 auto;
+  align-self: center;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 560;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.portfolio-ignore-btn:hover {
+  color: var(--red-deep);
+  border-color: var(--red-deep);
+  background: #fff;
+}
+.portfolio-ignore-btn.is-restore {
+  color: var(--ink, #1f2937);
+  border-color: #c5cdd8;
+}
+.portfolio-ignore-btn.is-restore:hover {
+  color: #0f766e;
+  border-color: #0f766e;
+}
+.portfolio-list-row.is-ignored .portfolio-list-open {
+  opacity: 0.72;
+}
+.portfolio-list-row.is-ignored em {
+  color: var(--muted);
+  font-weight: 500;
+}
+.portfolio-ignored {
+  margin-top: 4px;
 }
 .portfolio-empty-note {
   margin: 10px 0 0;
