@@ -2477,7 +2477,7 @@
       : `${rows.length.toLocaleString("pt-BR")} título(s) no recorte`;
     els.sumIdleValue.textContent = money(valorParado);
     els.sumIdleMeta.textContent = `${idle180Count.toLocaleString("pt-BR")} ISBN(s) parados há 180+ dias`;
-    els.sumRestockValue.textContent = money(potencial);
+    if (els.sumRestockValue) els.sumRestockValue.textContent = money(potencial);
     if (els.sumRestockMeta) {
       els.sumRestockMeta.textContent = potencialTitulos
         ? `${potencialUnidades.toLocaleString("pt-BR")} un. em ${potencialTitulos.toLocaleString("pt-BR")} título(s) do Top ${TOP_SALDO_RANK} abaixo de ${TARGET_OK_SALDO} un.`
