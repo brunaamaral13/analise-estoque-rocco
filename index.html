@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Outfit:wght@360;460;560;650&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260307e">
+  <link rel="stylesheet" href="styles.css?v=20261112portfolio">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b5191a'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -285,6 +285,64 @@
           <p class="empty-hint" id="emptyHint">Aceita arquivo .xlsx ou .xls do Mapão consolidado.</p>
         </div>
 
+        <div class="portfolio-overview" id="portfolioOverview" hidden>
+          <div class="portfolio-head">
+            <div>
+              <h2 id="portfolioTitle">Visão geral · carteira</h2>
+              <p class="portfolio-sub" id="portfolioSub">Antes de abrir um cliente: onde atacar na carteira com base no Top 150 Rocco.</p>
+            </div>
+            <div class="portfolio-head-meta">
+              <p class="portfolio-scope" id="portfolioScope">—</p>
+              <button type="button" class="portfolio-clear-filter" id="btnClearPortfolioFilter" hidden>Limpar filtro da carteira</button>
+            </div>
+          </div>
+
+          <div class="portfolio-kpis" id="portfolioKpis"></div>
+
+          <div class="portfolio-mid">
+            <section class="portfolio-panel" aria-labelledby="portfolioBandsTitle">
+              <h3 id="portfolioBandsTitle">Faixas de cobertura Top 150</h3>
+              <p class="portfolio-panel-sub">Clique numa faixa para filtrar o seletor de clientes</p>
+              <ul class="portfolio-bands" id="portfolioBands"></ul>
+            </section>
+            <section class="portfolio-panel" aria-labelledby="portfolioOppTitle">
+              <h3 id="portfolioOppTitle">Oportunidade da carteira</h3>
+              <p class="portfolio-panel-sub">Agregado · Top 150</p>
+              <dl class="portfolio-opp" id="portfolioOpp"></dl>
+            </section>
+          </div>
+
+          <section class="portfolio-panel portfolio-roteiro" aria-labelledby="portfolioRoteiroTitle">
+            <h3 id="portfolioRoteiroTitle">Roteiro do dia da carteira</h3>
+            <p class="portfolio-panel-sub">Comece por estes clientes (pior cobertura + maior ruptura)</p>
+            <ol class="portfolio-list" id="portfolioRoteiro"></ol>
+          </section>
+
+          <div class="portfolio-lists">
+            <section class="portfolio-panel" aria-labelledby="portfolioWorstTitle">
+              <h3 id="portfolioWorstTitle">Prioridade · pior cobertura Top 150</h3>
+              <p class="portfolio-panel-sub">Clique para abrir o cliente</p>
+              <ol class="portfolio-list" id="portfolioWorst"></ol>
+            </section>
+            <section class="portfolio-panel" aria-labelledby="portfolioRuptureTitle">
+              <h3 id="portfolioRuptureTitle">Prioridade · maior ruptura</h3>
+              <p class="portfolio-panel-sub">Top 150 sem saldo</p>
+              <ol class="portfolio-list" id="portfolioRupture"></ol>
+            </section>
+            <section class="portfolio-panel" aria-labelledby="portfolioIdleTitle">
+              <h3 id="portfolioIdleTitle">Prioridade · valor parado 180+</h3>
+              <p class="portfolio-panel-sub">Candidatos a devolução</p>
+              <ol class="portfolio-list" id="portfolioIdle"></ol>
+            </section>
+          </div>
+
+          <section class="portfolio-panel" aria-labelledby="portfolioChronicTitle">
+            <h3 id="portfolioChronicTitle">Títulos crônicos na carteira</h3>
+            <p class="portfolio-panel-sub">Top 150 em ruptura em ≥ 30% das lojas · clique para ver quem tem o item</p>
+            <ol class="portfolio-list" id="portfolioChronic"></ol>
+          </section>
+        </div>
+
         <table class="grid" id="grid" hidden>
           <thead>
             <tr>
@@ -305,6 +363,6 @@
   </div>
 
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="app.js?v=20260307e"></script>
+  <script src="app.js?v=20261112portfolio"></script>
 </body>
 </html>

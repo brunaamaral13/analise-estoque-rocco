@@ -1085,6 +1085,279 @@ h1, h2, p { margin: 0; }
   font-size: 13px !important;
 }
 
+.portfolio-overview {
+  padding: 22px 20px 24px;
+  display: grid;
+  gap: 14px;
+}
+.portfolio-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: end;
+}
+.portfolio-head h2 {
+  font-family: var(--serif);
+  font-size: clamp(1.35rem, 2.4vw, 1.7rem);
+  letter-spacing: -.02em;
+  margin: 0;
+}
+.portfolio-sub {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+  max-width: 46rem;
+}
+.portfolio-head-meta {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+.portfolio-scope {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--muted);
+}
+.portfolio-clear-filter {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 560;
+  color: var(--red-deep);
+}
+.portfolio-clear-filter:hover {
+  border-color: var(--red);
+}
+.portfolio-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+.portfolio-kpi {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: default;
+}
+.portfolio-kpi.is-clickable {
+  cursor: pointer;
+}
+.portfolio-kpi.is-clickable:hover,
+.portfolio-kpi.is-active {
+  border-color: #c9ceda;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+.portfolio-kpi.is-active {
+  border-color: var(--red);
+}
+.portfolio-kpi-label {
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 560;
+  line-height: 1.3;
+}
+.portfolio-kpi-value {
+  font-family: var(--serif);
+  font-size: clamp(1.35rem, 2vw, 1.7rem);
+  font-weight: 650;
+  letter-spacing: -.02em;
+  line-height: 1.1;
+}
+.portfolio-kpi-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+.portfolio-kpi.is-warn .portfolio-kpi-value { color: var(--down); }
+.portfolio-kpi.is-ok .portfolio-kpi-value { color: var(--green); }
+.portfolio-kpi.is-alert .portfolio-kpi-value { color: #7a5608; }
+
+.portfolio-mid,
+.portfolio-lists {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.portfolio-lists {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.portfolio-panel {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  min-width: 0;
+}
+.portfolio-panel h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+.portfolio-panel-sub {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.portfolio-roteiro {
+  background:
+    linear-gradient(135deg, rgba(181, 25, 26, 0.05), rgba(255, 255, 255, 0.9)),
+    var(--bg);
+}
+.portfolio-bands {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.portfolio-bands li {
+  margin: 0;
+}
+.portfolio-band {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 58px 1fr 28px;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 10px;
+  padding: 6px 4px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.portfolio-band:hover,
+.portfolio-band.is-active {
+  background: #fff;
+  border-color: var(--line);
+}
+.portfolio-band.is-active {
+  border-color: var(--red);
+}
+.portfolio-band-label {
+  font-size: 12px;
+  font-weight: 560;
+}
+.portfolio-band-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #e8ebf2;
+  overflow: hidden;
+}
+.portfolio-band-fill {
+  display: block;
+  height: 100%;
+  width: var(--w, 0%);
+  border-radius: inherit;
+  background: #5b6b8c;
+}
+.portfolio-band-fill.is-down { background: var(--down); }
+.portfolio-band-fill.is-ok { background: var(--green); }
+.portfolio-band-n {
+  text-align: right;
+  font-size: 12px;
+  font-weight: 650;
+}
+.portfolio-opp {
+  margin: 12px 0 0;
+  display: grid;
+  gap: 10px;
+}
+.portfolio-opp div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.portfolio-opp div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.portfolio-opp dt {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.portfolio-opp dd {
+  margin: 0;
+  font-weight: 650;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.portfolio-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.portfolio-list li {
+  margin: 0;
+}
+.portfolio-list button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 6px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.portfolio-list button:hover {
+  background: #fff;
+}
+.portfolio-list .portfolio-item-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.portfolio-list .portfolio-item-main strong {
+  font-size: 13px;
+  font-weight: 560;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.portfolio-list .portfolio-item-main span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.portfolio-list em {
+  font-style: normal;
+  font-weight: 650;
+  font-size: 12px;
+  color: var(--red-deep);
+  white-space: nowrap;
+}
+.portfolio-empty-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .grid {
   width: 100%;
   border-collapse: collapse;
@@ -1233,6 +1506,15 @@ h1, h2, p { margin: 0; }
 }
 .saldo-zero { color: var(--down); font-weight: 650; }
 
+@media (max-width: 1100px) {
+  .portfolio-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .portfolio-lists {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 960px) {
   .app { grid-template-columns: 1fr; }
   .sidebar {
@@ -1242,6 +1524,13 @@ h1, h2, p { margin: 0; }
   .client-bar-controls { grid-template-columns: 1fr; }
   .summary,
   .actions { grid-template-columns: 1fr; }
+  .portfolio-kpis,
+  .portfolio-mid {
+    grid-template-columns: 1fr;
+  }
+  .portfolio-head-meta {
+    justify-items: start;
+  }
   .top { flex-direction: column; }
   .title-search-wrap,
   .search { width: 100%; }

@@ -4,6 +4,15 @@
   const IDLE_DAYS_LONG = 180;
   const TOP_SALDO_RANK = 150;
   const TARGET_OK_SALDO = 8;
+  const HIGH_RUPTURE_PCT = 40;
+  const CHRONIC_STORE_PCT = 30;
+  const PORTFOLIO_LIST_LIMIT = 5;
+  const COVERAGE_BANDS = [
+    { key: "lt50", label: "< 50%", min: 0, max: 49, fillClass: "is-down" },
+    { key: "50_69", label: "50–69%", min: 50, max: 69, fillClass: "" },
+    { key: "70_89", label: "70–89%", min: 70, max: 89, fillClass: "" },
+    { key: "ge90", label: "≥ 90%", min: 90, max: 100, fillClass: "is-ok" },
+  ];
   const SELLER_STORAGE_KEY = "rocco_estoque_vendedor";
 
   // URL do Apps Script (planilha de acessos).
@@ -88,6 +97,19 @@
     emptyText: document.getElementById("emptyText"),
     grid: document.getElementById("grid"),
     tbody: document.getElementById("tbody"),
+    portfolioOverview: document.getElementById("portfolioOverview"),
+    portfolioTitle: document.getElementById("portfolioTitle"),
+    portfolioSub: document.getElementById("portfolioSub"),
+    portfolioScope: document.getElementById("portfolioScope"),
+    btnClearPortfolioFilter: document.getElementById("btnClearPortfolioFilter"),
+    portfolioKpis: document.getElementById("portfolioKpis"),
+    portfolioBands: document.getElementById("portfolioBands"),
+    portfolioOpp: document.getElementById("portfolioOpp"),
+    portfolioRoteiro: document.getElementById("portfolioRoteiro"),
+    portfolioWorst: document.getElementById("portfolioWorst"),
+    portfolioRupture: document.getElementById("portfolioRupture"),
+    portfolioIdle: document.getElementById("portfolioIdle"),
+    portfolioChronic: document.getElementById("portfolioChronic"),
   };
 
   const state = {
@@ -115,6 +137,8 @@
     sortDir: "asc",
     mapaQuality: null,
     mapaIsbnQuality: null,
+    portfolioOverview: null,
+    portfolioClientFilter: null,
   };
 
   function logSellerAccess(vendedor) {
@@ -597,6 +621,9 @@
 
       const last = state.ranking.at(-1)?.ranking || "—";
       els.rankMeta.textContent = `${state.ranking.length.toLocaleString("pt-BR")} títulos no ranking (1 a ${last})`;
+      // Ranking novo: agregados da carteira precisam ser recalculados.
+      invalidatePortfolioOverview();
+      if (state.clients.length) render();
     } catch (err) {
       console.error(err);
       els.rankMeta.textContent = "Não foi possível carregar o ranking. Abra o dashboard por um servidor local (não pelo file://).";
@@ -679,16 +706,20 @@
     };
   }
 
-  function findStockForRanking(item) {
+  function findStockForRankingIn(item, stockLookup, stockByKey) {
     for (const alias of item.aliases || isbnAliases(item.isbn)) {
-      const key = state.stockLookup.get(alias);
-      if (key && state.stockByKey.has(key)) return state.stockByKey.get(key);
+      const key = stockLookup.get(alias);
+      if (key && stockByKey.has(key)) return stockByKey.get(key);
     }
     if (item.titleKey) {
-      const key = state.stockLookup.get(`T:${item.titleKey}`);
-      if (key && state.stockByKey.has(key)) return state.stockByKey.get(key);
+      const key = stockLookup.get(`T:${item.titleKey}`);
+      if (key && stockByKey.has(key)) return stockByKey.get(key);
     }
     return null;
+  }
+
+  function findStockForRanking(item) {
+    return findStockForRankingIn(item, state.stockLookup, state.stockByKey);
   }
 
   function rowSellerName(row) {
@@ -1283,11 +1314,25 @@
       .trim();
   }
 
-  function filteredClients() {
-    const q = normalizeSearch(state.clientQuery);
+  // Clientes do vendedor do Mapão selecionado (ou todos, sem filtro).
+  function clientsInSellerScope() {
     const seller = normalizeSearch(state.sellerFilter);
-    return state.clients.filter((c) => {
-      if (seller && normalizeSearch(c.vendedor) !== seller) return false;
+    if (!seller) return state.clients;
+    return state.clients.filter((c) => normalizeSearch(c.vendedor) === seller);
+  }
+
+  function filteredClients({ ignorePortfolio = false } = {}) {
+    const q = normalizeSearch(state.clientQuery);
+    let base = clientsInSellerScope();
+    if (!ignorePortfolio && state.portfolioClientFilter) {
+      const overview = ensurePortfolioOverview();
+      const codes = codesForPortfolioFilter(state.portfolioClientFilter, overview);
+      if (codes) {
+        const allowed = new Set(codes.map(String));
+        base = base.filter((c) => allowed.has(String(c.codigo)));
+      }
+    }
+    return base.filter((c) => {
       if (!q) return true;
       const blob = normalizeSearch(`${c.codigo} ${c.nome} ${c.cidade} ${c.estado} ${c.vendedor}`);
       return blob.includes(q) || normalizeSearch(c.codigo).startsWith(q);
@@ -1632,6 +1677,455 @@
     return stock.preco == null ? null : stock.preco;
   }
 
+  // Itens do ranking que entram no cálculo de saldo/ruptura (Top 150).
+  function topSaldoRankingItems() {
+    return state.ranking.filter((item) => item.ranking != null && item.ranking >= 1 && item.ranking <= TOP_SALDO_RANK);
+  }
+
+  // Métricas do Top 150 sobre o estoque de UM cliente (mesma regra de saldo/potencial/parado
+  // usada em updateActionKpis, mas sem depender das linhas da tabela / recorte de títulos).
+  function computeTop150Metrics(stockByKey, stockLookup, top150Items = topSaldoRankingItems()) {
+    let urgent = 0;
+    let alert = 0;
+    let acerto = 0;
+    let idle180Count = 0;
+    let top150 = 0;
+    let withStock = 0;
+    let rupture = 0;
+    let valorParado = 0;
+    let potencial = 0;
+    const rupturedItems = [];
+
+    top150Items.forEach((item) => {
+      top150 += 1;
+      const stock = findStockForRankingIn(item, stockLookup, stockByKey);
+      const saldo = stock ? (stock.consignado || 0) : 0;
+      const unit = unitNetPrice(stock);
+
+      if (!stock || saldo <= 0) {
+        rupture += 1;
+        urgent += 1;
+        rupturedItems.push(item);
+        if (unit != null) potencial += TARGET_OK_SALDO * unit;
+        return;
+      }
+
+      withStock += 1;
+      if (saldo <= 3) {
+        urgent += 1;
+        if (unit != null) potencial += Math.max(TARGET_OK_SALDO - saldo, 0) * unit;
+      } else if (saldo <= 7) {
+        alert += 1;
+        if (unit != null) potencial += Math.max(TARGET_OK_SALDO - saldo, 0) * unit;
+      }
+    });
+
+    stockByKey.forEach((stock) => {
+      if ((stock.consignado || 0) <= 0) return;
+      const fdias = stock.fdias || 0;
+      if (fdias >= IDLE_DAYS) acerto += 1;
+      if (fdias >= IDLE_DAYS_LONG) {
+        idle180Count += 1;
+        valorParado += stock.valorLiquido || 0;
+      }
+    });
+
+    const pctStock = top150 ? Math.round((withStock / top150) * 100) : 0;
+    const pctRupture = top150 ? Math.round((rupture / top150) * 100) : 0;
+
+    return {
+      top150,
+      withStock,
+      rupture,
+      pctStock,
+      pctRupture,
+      urgent,
+      alert,
+      acerto,
+      idle180Count,
+      valorParado,
+      potencial,
+      rupturedItems,
+    };
+  }
+
+  function coverageBandKey(pctStock) {
+    const band = COVERAGE_BANDS.find((b) => pctStock >= b.min && pctStock <= b.max);
+    return band ? band.key : "lt50";
+  }
+
+  function invalidatePortfolioOverview() {
+    state.portfolioOverview = null;
+  }
+
+  // Agregados da carteira sobre os clientes informados (já filtrados pelo vendedor do Mapão).
+  function computePortfolioOverview(clients) {
+    const list = Array.isArray(clients) ? clients : [];
+    const clientCount = list.length;
+    const bandCodes = Object.fromEntries(COVERAGE_BANDS.map((b) => [b.key, []]));
+    const highRuptureCodes = [];
+    const below50Codes = [];
+    const ge90Codes = [];
+    const clientRows = [];
+    const titleRupture = new Map();
+    const top150Items = topSaldoRankingItems();
+    let sumCoverage = 0;
+    let sumPotencial = 0;
+    let sumValorParado = 0;
+
+    // Agrupa o Mapão por cliente uma única vez (evita varrer todas as linhas por cliente).
+    const rowsByClient = new Map();
+    state.mapaRows.forEach((row) => {
+      const code = String(row.codigo || "").trim();
+      if (!code) return;
+      const bucket = rowsByClient.get(code);
+      if (bucket) bucket.push(row);
+      else rowsByClient.set(code, [row]);
+    });
+
+    list.forEach((client) => {
+      const clientRowsRaw = rowsByClient.get(String(client.codigo)) || [];
+      const built = buildClientStock(clientRowsRaw, client.codigo);
+      const metrics = computeTop150Metrics(built.byKey, built.lookup, top150Items);
+      const band = coverageBandKey(metrics.pctStock);
+      bandCodes[band].push(client.codigo);
+      if (metrics.pctStock < 50) below50Codes.push(client.codigo);
+      if (metrics.pctStock >= 90) ge90Codes.push(client.codigo);
+      if (metrics.pctRupture >= HIGH_RUPTURE_PCT) highRuptureCodes.push(client.codigo);
+
+      sumCoverage += metrics.pctStock;
+      sumPotencial += metrics.potencial;
+      sumValorParado += metrics.valorParado;
+
+      metrics.rupturedItems.forEach((item) => {
+        const key = item.isbn || item.titleKey || String(item.ranking);
+        const prev = titleRupture.get(key) || {
+          key,
+          isbn: item.isbn || "",
+          titulo: item.titulo || "",
+          ranking: item.ranking,
+          storeCount: 0,
+        };
+        prev.storeCount += 1;
+        titleRupture.set(key, prev);
+      });
+
+      clientRows.push({
+        codigo: client.codigo,
+        nome: client.nome,
+        cidade: client.cidade || "",
+        estado: client.estado || "",
+        pctStock: metrics.pctStock,
+        pctRupture: metrics.pctRupture,
+        rupture: metrics.rupture,
+        valorParado: metrics.valorParado,
+        potencial: metrics.potencial,
+        score: (100 - metrics.pctStock) + metrics.pctRupture,
+      });
+    });
+
+    const avgCoverage = clientCount ? Math.round(sumCoverage / clientCount) : 0;
+    const bands = COVERAGE_BANDS.map((b) => ({
+      ...b,
+      count: bandCodes[b.key].length,
+      pct: clientCount ? Math.round((bandCodes[b.key].length / clientCount) * 100) : 0,
+    }));
+
+    const minChronicStores = Math.max(1, Math.ceil(clientCount * (CHRONIC_STORE_PCT / 100)));
+    const chronicAll = [...titleRupture.values()]
+      .filter((t) => t.storeCount >= minChronicStores)
+      .sort((a, b) => b.storeCount - a.storeCount || (a.ranking || 0) - (b.ranking || 0));
+    const chronicTitles = chronicAll
+      .slice(0, PORTFOLIO_LIST_LIMIT)
+      .map((t) => ({
+        ...t,
+        storePct: clientCount ? Math.round((t.storeCount / clientCount) * 100) : 0,
+      }));
+
+    const byName = (a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
+    const worstCoverage = [...clientRows]
+      .sort((a, b) => a.pctStock - b.pctStock || b.rupture - a.rupture || byName(a, b))
+      .slice(0, PORTFOLIO_LIST_LIMIT);
+    const mostRupture = [...clientRows]
+      .sort((a, b) => b.rupture - a.rupture || a.pctStock - b.pctStock || byName(a, b))
+      .slice(0, PORTFOLIO_LIST_LIMIT);
+    const mostIdleValue = [...clientRows]
+      .sort((a, b) => b.valorParado - a.valorParado || byName(a, b))
+      .slice(0, PORTFOLIO_LIST_LIMIT);
+    const roteiro = [...clientRows]
+      .sort((a, b) => b.score - a.score || a.pctStock - b.pctStock || byName(a, b))
+      .slice(0, PORTFOLIO_LIST_LIMIT);
+
+    return {
+      // Escopo do cache: vendedor do Mapão usado no cálculo.
+      sellerKey: normalizeSearch(state.sellerFilter),
+      clientCount,
+      avgCoverage,
+      below50Count: below50Codes.length,
+      ge90Count: ge90Codes.length,
+      highRuptureCount: highRuptureCodes.length,
+      bands,
+      bandCodes,
+      below50Codes,
+      ge90Codes,
+      highRuptureCodes,
+      potencial: sumPotencial,
+      valorParado: sumValorParado,
+      chronicTitleCount: chronicAll.length,
+      roteiro,
+      worstCoverage,
+      mostRupture,
+      mostIdleValue,
+      chronicTitles,
+    };
+  }
+
+  // Cache de state.portfolioOverview; recalcula se o vendedor do Mapão mudou.
+  function ensurePortfolioOverview() {
+    if (!state.clients.length || !state.ranking.length) {
+      state.portfolioOverview = null;
+      return null;
+    }
+    const sellerKey = normalizeSearch(state.sellerFilter);
+    if (!state.portfolioOverview || state.portfolioOverview.sellerKey !== sellerKey) {
+      state.portfolioOverview = computePortfolioOverview(clientsInSellerScope());
+    }
+    return state.portfolioOverview;
+  }
+
+  function portfolioFilterLabel(filter) {
+    if (!filter) return "";
+    if (filter.type === "band") {
+      const band = COVERAGE_BANDS.find((b) => b.key === filter.key);
+      return band ? `Cobertura ${band.label}` : "Faixa de cobertura";
+    }
+    if (filter.type === "below50") return "Cobertura < 50%";
+    if (filter.type === "ge90") return "Cobertura ≥ 90%";
+    if (filter.type === "highRupture") return `Alta ruptura (≥ ${HIGH_RUPTURE_PCT}%)`;
+    return "Filtro da carteira";
+  }
+
+  function codesForPortfolioFilter(filter, overview) {
+    if (!filter || !overview) return null;
+    if (filter.type === "band") return overview.bandCodes[filter.key] || [];
+    if (filter.type === "below50") return overview.below50Codes || [];
+    if (filter.type === "ge90") return overview.ge90Codes || [];
+    if (filter.type === "highRupture") return overview.highRuptureCodes || [];
+    return null;
+  }
+
+  function setPortfolioClientFilter(filter) {
+    const current = state.portfolioClientFilter;
+    const same = current
+      && filter
+      && current.type === filter.type
+      && current.key === filter.key;
+    state.portfolioClientFilter = same ? null : filter;
+    if (els.clientQuery) {
+      state.clientQuery = "";
+      els.clientQuery.value = "";
+    }
+    render();
+    if (els.clientSelect) els.clientSelect.focus();
+  }
+
+  function clearPortfolioClientFilter() {
+    state.portfolioClientFilter = null;
+    render();
+  }
+
+  // Título crônico: reaproveita a busca por título/ISBN (clientes que ainda têm o item).
+  function openChronicTitle(item) {
+    if (!item) return;
+    clearClientSelection();
+    state.selectedProducts = [{
+      key: productKey(item) || `isbn:${item.isbn || item.key || ""}`,
+      isbn: item.isbn || "",
+      codlivro: "",
+      titulo: item.titulo || "",
+    }];
+    state.isbnSearchOpen = true;
+    refreshSelectedProductResults();
+  }
+
+  function renderPortfolioClientList(target, rows, valueFn) {
+    if (!target) return;
+    if (!rows.length) {
+      target.innerHTML = `<li><p class="portfolio-empty-note">Nenhum cliente neste recorte.</p></li>`;
+      return;
+    }
+    target.innerHTML = rows.map((c) => {
+      const place = [c.cidade, c.estado].filter(Boolean).join("/") || c.codigo;
+      return `
+        <li>
+          <button type="button" data-portfolio-client="${escapeHtml(c.codigo)}">
+            <span class="portfolio-item-main">
+              <strong>${escapeHtml(c.nome)}</strong>
+              <span>${escapeHtml(place)}</span>
+            </span>
+            <em>${escapeHtml(valueFn(c))}</em>
+          </button>
+        </li>
+      `;
+    }).join("");
+  }
+
+  function renderPortfolioOverview(overviewArg) {
+    if (!els.portfolioOverview) return;
+    const overview = overviewArg || ensurePortfolioOverview();
+    if (!overview) {
+      els.portfolioOverview.hidden = true;
+      return;
+    }
+
+    const filter = state.portfolioClientFilter;
+    const filterActive = Boolean(filter);
+    const sellerLabel = state.sellerFilter ? ` · ${state.sellerFilter}` : "";
+    if (els.portfolioTitle) {
+      els.portfolioTitle.textContent = `Visão geral · carteira${sellerLabel}`;
+    }
+    if (els.portfolioScope) {
+      const clientsLabel = `${overview.clientCount.toLocaleString("pt-BR")} cliente(s)`;
+      const sellerScope = state.sellerFilter ? ` · vendedor ${state.sellerFilter}` : "";
+      els.portfolioScope.textContent = filterActive
+        ? `${clientsLabel}${sellerScope} · filtro: ${portfolioFilterLabel(filter)}`
+        : `${clientsLabel}${sellerScope} · base Mais vendidos · Top ${TOP_SALDO_RANK}`;
+    }
+    if (els.btnClearPortfolioFilter) {
+      els.btnClearPortfolioFilter.hidden = !filterActive;
+    }
+
+    if (els.portfolioKpis) {
+      const kpis = [
+        {
+          key: "clients",
+          label: "Clientes na carteira",
+          value: overview.clientCount.toLocaleString("pt-BR"),
+          meta: state.sellerFilter ? `Vendedor ${state.sellerFilter}` : "Mapão importado",
+        },
+        {
+          key: "avg",
+          label: "Cobertura média Top 150",
+          value: `${overview.avgCoverage}%`,
+          meta: "Média das lojas com saldo",
+        },
+        {
+          key: "below50",
+          label: "Cobertura < 50%",
+          value: overview.below50Count.toLocaleString("pt-BR"),
+          meta: "Clientes fracos no Top 150",
+          tone: "is-warn",
+          filter: { type: "below50" },
+        },
+        {
+          key: "ge90",
+          label: "Cobertura ≥ 90%",
+          value: overview.ge90Count.toLocaleString("pt-BR"),
+          meta: "Lojas bem cobertas",
+          tone: "is-ok",
+          filter: { type: "ge90" },
+        },
+        {
+          key: "highRupture",
+          label: "Alta ruptura",
+          value: overview.highRuptureCount.toLocaleString("pt-BR"),
+          meta: `≥ ${HIGH_RUPTURE_PCT}% do Top 150 sem saldo`,
+          tone: "is-alert",
+          filter: { type: "highRupture" },
+        },
+      ];
+
+      els.portfolioKpis.innerHTML = kpis.map((kpi) => {
+        const active = filter
+          && kpi.filter
+          && filter.type === kpi.filter.type
+          && filter.key === kpi.filter.key;
+        const tag = kpi.filter ? "button" : "div";
+        const attrs = kpi.filter
+          ? `type="button" data-portfolio-filter-type="${escapeHtml(kpi.filter.type)}" class="portfolio-kpi is-clickable ${kpi.tone || ""}${active ? " is-active" : ""}"`
+          : `class="portfolio-kpi ${kpi.tone || ""}"`;
+        return `
+          <${tag} ${attrs}>
+            <span class="portfolio-kpi-label">${escapeHtml(kpi.label)}</span>
+            <strong class="portfolio-kpi-value">${escapeHtml(kpi.value)}</strong>
+            <span class="portfolio-kpi-meta">${escapeHtml(kpi.meta)}</span>
+          </${tag}>
+        `;
+      }).join("");
+    }
+
+    if (els.portfolioBands) {
+      els.portfolioBands.innerHTML = overview.bands.map((band) => {
+        const active = filter && filter.type === "band" && filter.key === band.key;
+        return `
+          <li>
+            <button type="button" class="portfolio-band${active ? " is-active" : ""}" data-portfolio-band="${escapeHtml(band.key)}">
+              <span class="portfolio-band-label">${escapeHtml(band.label)}</span>
+              <span class="portfolio-band-track"><span class="portfolio-band-fill ${band.fillClass || ""}" style="--w:${band.pct}%"></span></span>
+              <span class="portfolio-band-n">${band.count.toLocaleString("pt-BR")}</span>
+            </button>
+          </li>
+        `;
+      }).join("");
+    }
+
+    if (els.portfolioOpp) {
+      els.portfolioOpp.innerHTML = `
+        <div>
+          <dt>Potencial de reposição</dt>
+          <dd>${money(overview.potencial)}</dd>
+        </div>
+        <div>
+          <dt>Valor parado 180+ dias</dt>
+          <dd>${money(overview.valorParado)}</dd>
+        </div>
+        <div>
+          <dt>Títulos Top 150 em ruptura em ≥ ${CHRONIC_STORE_PCT}% das lojas</dt>
+          <dd>${overview.chronicTitleCount.toLocaleString("pt-BR")} títulos</dd>
+        </div>
+      `;
+    }
+
+    renderPortfolioClientList(
+      els.portfolioRoteiro,
+      overview.roteiro,
+      (c) => `${c.pctStock}% · ${c.rupture} faltando`
+    );
+    renderPortfolioClientList(
+      els.portfolioWorst,
+      overview.worstCoverage,
+      (c) => `${c.pctStock}%`
+    );
+    renderPortfolioClientList(
+      els.portfolioRupture,
+      overview.mostRupture,
+      (c) => `${c.rupture.toLocaleString("pt-BR")} faltando`
+    );
+    renderPortfolioClientList(
+      els.portfolioIdle,
+      overview.mostIdleValue,
+      (c) => money(c.valorParado)
+    );
+
+    if (els.portfolioChronic) {
+      if (!overview.chronicTitles.length) {
+        els.portfolioChronic.innerHTML = `<li><p class="portfolio-empty-note">Nenhum título do Top 150 em ruptura em ≥ ${CHRONIC_STORE_PCT}% das lojas.</p></li>`;
+      } else {
+        els.portfolioChronic.innerHTML = overview.chronicTitles.map((t) => `
+          <li>
+            <button type="button" data-portfolio-chronic="${escapeHtml(t.key)}" data-isbn="${escapeHtml(t.isbn || "")}" data-titulo="${escapeHtml(t.titulo || "")}">
+              <span class="portfolio-item-main">
+                <strong>${escapeHtml(t.titulo || t.isbn || "Sem título")}</strong>
+                <span>${escapeHtml(t.isbn || "Sem ISBN")}${t.ranking != null ? ` · #${t.ranking}` : ""}</span>
+              </span>
+              <em>${t.storeCount.toLocaleString("pt-BR")} lojas (${t.storePct}%)</em>
+            </button>
+          </li>
+        `).join("");
+      }
+    }
+  }
+
   function updateActionKpis(rows) {
     let urgent = 0;
     let alert = 0;
@@ -1730,6 +2224,7 @@
     return Boolean(
       state.selectedClient
       || state.sellerFilter
+      || state.portfolioClientFilter
       || state.filter !== "all"
       || state.query.trim()
       || state.selectedQueries.length
@@ -1752,11 +2247,12 @@
     }
 
     if (els.sideActiveFilters) {
-      if (!client && !state.sellerFilter) {
+      if (!client && !state.sellerFilter && !state.portfolioClientFilter) {
         els.sideActiveFilters.innerHTML = `<li>Nenhum cliente selecionado</li>`;
       } else {
         els.sideActiveFilters.innerHTML = `
           ${state.sellerFilter ? `<li><strong>Vendedor do Mapão</strong>${escapeHtml(state.sellerFilter)}</li>` : ""}
+          ${state.portfolioClientFilter ? `<li><strong>Filtro carteira</strong>${escapeHtml(portfolioFilterLabel(state.portfolioClientFilter))}</li>` : ""}
           <li><strong>Cliente</strong>${client ? `${escapeHtml(client.codigo)} · ${escapeHtml(client.nome)}` : "Nenhum"}</li>
           <li><strong>Base</strong>Mais vendidos Rocco (Top 500)</li>
           <li><strong>Filtro da tabela</strong>${escapeHtml(filterLabel)}</li>
@@ -1766,7 +2262,7 @@
     }
 
     if (els.mainActiveFilters) {
-      if (!client && !state.sellerFilter && !canClear) {
+      if (!client && !state.sellerFilter && !state.portfolioClientFilter && !canClear) {
         els.mainActiveFilters.hidden = true;
         els.mainActiveFilters.innerHTML = "";
         return;
@@ -1786,6 +2282,7 @@
       els.mainActiveFilters.innerHTML = `
         ${state.seller ? `<button type="button" class="filter-chip is-removable" data-clear="seller" title="Trocar usuário"><em>Usuário</em> ${escapeHtml(state.seller)} <span class="chip-x" aria-hidden="true">×</span></button>` : ""}
         ${state.sellerFilter ? `<button type="button" class="filter-chip is-removable" data-clear="seller-filter" title="Remover filtro de vendedor"><em>Vendedor Mapão</em> ${escapeHtml(state.sellerFilter)} <span class="chip-x" aria-hidden="true">×</span></button>` : ""}
+        ${state.portfolioClientFilter ? `<button type="button" class="filter-chip is-removable" data-clear="portfolio-filter" title="Remover filtro da carteira"><em>Carteira</em> ${escapeHtml(portfolioFilterLabel(state.portfolioClientFilter))} <span class="chip-x" aria-hidden="true">×</span></button>` : ""}
         ${client ? `<button type="button" class="filter-chip is-removable" data-clear="client" title="Remover cliente"><em>Cliente</em> ${escapeHtml(client.codigo)} · ${escapeHtml(client.nome)} <span class="chip-x" aria-hidden="true">×</span></button>` : ""}
         <span class="filter-chip"><em>Base</em> Mais vendidos</span>
         ${hasActiveFilter
@@ -1827,6 +2324,8 @@
     clearSelectedQueries();
     clearIsbnSearch();
     state.sellerFilter = "";
+    state.portfolioClientFilter = null;
+    invalidatePortfolioOverview();
     if (els.sellerFilter) els.sellerFilter.value = "";
     clearClientSelection();
     syncFilterActiveState();
@@ -1896,6 +2395,19 @@
     els.sellerFilter.disabled = sellers.length === 0;
   }
 
+  // Cliente selecionado fora do vendedor/busca atual: limpa sem reentrar no render.
+  function dropOutOfScopeClient() {
+    if (!state.selectedClient || !state.clients.length) return;
+    const code = state.selectedClient.codigo;
+    // Filtro da carteira não derruba o cliente aberto (ele vem das listas da visão geral).
+    if (filteredClients({ ignorePortfolio: true }).some((c) => c.codigo === code)) return;
+    state.selectedClient = null;
+    state.stockByKey = new Map();
+    state.stockLookup = new Map();
+    state.mapaQuality = null;
+    if (els.clientMeta) els.clientMeta.textContent = "";
+  }
+
   function renderClientPicker() {
     const hasClients = state.clients.length > 0;
     if (els.clientBar) els.clientBar.hidden = !hasClients;
@@ -1906,32 +2418,22 @@
     const selectedCode = state.selectedClient?.codigo || "";
     const visible = filteredClients();
     const selectedVisible = visible.some((c) => c.codigo === selectedCode);
-    const placeholderSelected = !selectedCode || !selectedVisible ? " selected" : "";
-    const options = visible
+    const optionClients = selectedCode && !selectedVisible ? [state.selectedClient, ...visible] : visible;
+    const placeholderSelected = selectedCode ? "" : " selected";
+    const options = optionClients
       .map((c) => {
         const seller = c.vendedor ? ` · ${c.vendedor}` : "";
         const label = `${c.codigo} · ${c.nome}${seller}`;
-        const selected = c.codigo === selectedCode && selectedVisible ? " selected" : "";
+        const selected = c.codigo === selectedCode ? " selected" : "";
         return `<option value="${escapeHtml(c.codigo)}"${selected}>${escapeHtml(label)}</option>`;
       })
       .join("");
 
-    els.clientSelect.innerHTML = `<option value=""${placeholderSelected}>Selecione um cliente (${visible.length})</option>${options}`;
-    els.clientSelect.value = selectedVisible ? selectedCode : "";
-    if (selectedCode && !selectedVisible) {
-      // Cliente atual fora do filtro de vendedor: limpa sem reentrar no render.
-      state.selectedClient = null;
-      state.stockByKey = new Map();
-      state.stockLookup = new Map();
-      state.mapaQuality = null;
-      if (els.clientMeta) els.clientMeta.textContent = "";
-      if (els.grid) els.grid.hidden = true;
-      if (els.summary) els.summary.hidden = true;
-      if (els.actions) els.actions.hidden = true;
-      if (els.filters) els.filters.hidden = true;
-      if (els.sideKpis) els.sideKpis.hidden = true;
-      if (els.emptyState) els.emptyState.hidden = false;
-    }
+    const placeholder = state.portfolioClientFilter
+      ? `Selecione um cliente (${visible.length.toLocaleString("pt-BR")} filtrado(s))`
+      : `Selecione um cliente (${visible.length})`;
+    els.clientSelect.innerHTML = `<option value=""${placeholderSelected}>${escapeHtml(placeholder)}</option>${options}`;
+    els.clientSelect.value = selectedCode;
     renderClientResults(visible);
   }
 
@@ -1943,7 +2445,11 @@
     if (els.btnImportMain) els.btnImportMain.hidden = hasMapa;
     if (els.emptyHint) els.emptyHint.hidden = hasMapa;
 
-    if (hasMapa) {
+    if (hasMapa && ensurePortfolioOverview()) {
+      els.topSub.textContent = state.seller
+        ? `${state.seller} · visão geral da carteira · escolha um cliente para detalhar.`
+        : "Visão geral da carteira · escolha um cliente para detalhar.";
+    } else if (hasMapa) {
       els.emptyTitle.textContent = "Escolha um cliente";
       els.emptyText.textContent = `Mapão importado com ${state.clients.length.toLocaleString("pt-BR")} cliente(s). Escolha um cliente acima, ou busque por título/ISBN à direita para ver quem tem o item em estoque.`;
       els.topSub.textContent = state.seller
@@ -1967,8 +2473,12 @@
   }
 
   function render() {
+    dropOutOfScopeClient();
     const hasClient = Boolean(state.selectedClient);
     const hasIsbnView = Boolean(state.isbnResult && state.selectedProducts.length && !hasClient);
+    const hasMapa = state.clients.length > 0;
+    const showPortfolio = hasMapa && !hasClient && !hasIsbnView;
+    const portfolioData = showPortfolio ? ensurePortfolioOverview() : null;
 
     if (els.isbnSearchPanel) els.isbnSearchPanel.hidden = !state.isbnSearchOpen;
     if (els.btnToggleIsbnSearch) {
@@ -1976,7 +2486,8 @@
       els.btnToggleIsbnSearch.textContent = state.isbnSearchOpen ? "Ocultar busca por título/ISBN" : "Buscar por título/ISBN";
     }
 
-    if (els.emptyState) els.emptyState.hidden = hasClient || hasIsbnView;
+    if (els.emptyState) els.emptyState.hidden = hasClient || hasIsbnView || Boolean(portfolioData);
+    if (els.portfolioOverview) els.portfolioOverview.hidden = !portfolioData;
     if (els.grid) els.grid.hidden = !hasClient;
     if (els.summary) els.summary.hidden = !hasClient;
     if (els.actions) els.actions.hidden = !hasClient;
@@ -1996,6 +2507,7 @@
     renderSelectedTitleChips();
     renderMapaIsbnWarning();
     renderIsbnResults();
+    if (portfolioData) renderPortfolioOverview(portfolioData);
 
     if (hasIsbnView && els.topSub) {
       const n = state.isbnResult.clients.length;
@@ -2109,6 +2621,8 @@
     state.stockLookup = new Map();
     state.mapaQuality = null;
     state.mapaIsbnQuality = quality;
+    state.portfolioClientFilter = null;
+    invalidatePortfolioOverview();
     clearIsbnSearch();
     clearSelectedQueries();
     els.clientQuery.value = "";
@@ -2129,6 +2643,41 @@
   els.btnImport.addEventListener("click", () => openMapaPicker());
   if (els.btnImportMain) {
     els.btnImportMain.addEventListener("click", () => openMapaPicker());
+  }
+
+  if (els.btnClearPortfolioFilter) {
+    els.btnClearPortfolioFilter.addEventListener("click", () => clearPortfolioClientFilter());
+  }
+
+  if (els.portfolioOverview) {
+    els.portfolioOverview.addEventListener("click", (e) => {
+      const clientBtn = e.target.closest("[data-portfolio-client]");
+      if (clientBtn) {
+        selectClient(clientBtn.dataset.portfolioClient);
+        return;
+      }
+
+      const chronicBtn = e.target.closest("[data-portfolio-chronic]");
+      if (chronicBtn) {
+        openChronicTitle({
+          key: chronicBtn.dataset.portfolioChronic,
+          isbn: chronicBtn.dataset.isbn || "",
+          titulo: chronicBtn.dataset.titulo || "",
+        });
+        return;
+      }
+
+      const bandBtn = e.target.closest("[data-portfolio-band]");
+      if (bandBtn) {
+        setPortfolioClientFilter({ type: "band", key: bandBtn.dataset.portfolioBand });
+        return;
+      }
+
+      const filterBtn = e.target.closest("[data-portfolio-filter-type]");
+      if (filterBtn) {
+        setPortfolioClientFilter({ type: filterBtn.dataset.portfolioFilterType });
+      }
+    });
   }
 
   if (els.btnToggleIsbnSearch) {
@@ -2242,6 +2791,7 @@
   if (els.sellerFilter) {
     els.sellerFilter.addEventListener("change", (e) => {
       state.sellerFilter = e.target.value || "";
+      invalidatePortfolioOverview();
       if (state.selectedProducts.length) {
         state.isbnResult = findClientsBySelectedProducts(state.selectedProducts);
       }
@@ -2607,11 +3157,16 @@
       }
       if (action === "seller-filter") {
         state.sellerFilter = "";
+        invalidatePortfolioOverview();
         if (els.sellerFilter) els.sellerFilter.value = "";
         if (state.selectedProducts.length) {
           state.isbnResult = findClientsBySelectedProducts(state.selectedProducts);
         }
         render();
+        return;
+      }
+      if (action === "portfolio-filter") {
+        clearPortfolioClientFilter();
         return;
       }
       if (action === "seller") {
