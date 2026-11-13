@@ -2281,19 +2281,21 @@
           meta: state.sellerFilter
             ? `Lojas do vendedor ${state.sellerFilter} neste Mapão`
             : "Total de lojas neste Mapão",
+          tone: "is-navy",
         },
         {
           key: "avg",
           label: "Cobertura média do Top 150",
           value: `${overview.avgCoverage}%`,
           meta: "Em média, quanto do Top 150 as lojas têm em estoque",
+          tone: "is-teal",
         },
         {
           key: "below50",
           label: "Cobertura abaixo de 50%",
           value: overview.below50Count.toLocaleString("pt-BR"),
           meta: "Lojas com menos da metade do Top 150 em estoque",
-          tone: "is-warn",
+          tone: "is-maroon",
           filter: { type: "below50" },
         },
         {
@@ -2301,7 +2303,7 @@
           label: "Cobertura a partir de 90%",
           value: overview.ge90Count.toLocaleString("pt-BR"),
           meta: "Lojas com quase todo o Top 150 em estoque",
-          tone: "is-ok",
+          tone: "is-green",
           filter: { type: "ge90" },
         },
         {
@@ -2309,7 +2311,7 @@
           label: "Alta ruptura",
           value: overview.highRuptureCount.toLocaleString("pt-BR"),
           meta: `Lojas com pelo menos ${HIGH_RUPTURE_PCT}% do Top 150 sem saldo`,
-          tone: "is-alert",
+          tone: "is-amber",
           filter: { type: "highRupture" },
         },
       ];
