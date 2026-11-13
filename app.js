@@ -2064,7 +2064,7 @@
   function portfolioStockLabel(c) {
     const isbns = Number(c.isbnsConsignados || 0);
     const volume = Number(c.volumeConsignado || 0);
-    return `${isbns.toLocaleString("pt-BR")} ISBNs · ${volume.toLocaleString("pt-BR")} un.`;
+    return `${isbns.toLocaleString("pt-BR")} isbns consignados - volume total de ${volume.toLocaleString("pt-BR")} ex.`;
   }
 
   function renderPortfolioClientList(target, rows, valueFn, { ignorable = false } = {}) {
@@ -2117,7 +2117,7 @@
       const meta = [c.codigo, place].filter(Boolean).join(" · ");
       const detail = c.pctStock == null
         ? "desconsiderada na análise"
-        : `cobertura ${c.pctStock}% · ${Number(c.rupture || 0).toLocaleString("pt-BR")} faltando`;
+        : `cobertura ${c.pctStock}% · ${Number(c.rupture || 0).toLocaleString("pt-BR")} títulos faltando do top 150`;
       const stock = c.pctStock == null ? "" : `
             <span class="portfolio-item-stock">${escapeHtml(portfolioStockLabel(c))}</span>`;
       return `
@@ -2257,19 +2257,19 @@
     renderPortfolioClientList(
       els.portfolioRoteiro,
       visibleAnalysisRows(overview.roteiro),
-      (c) => `cobertura ${c.pctStock}%, ${c.rupture.toLocaleString("pt-BR")} títulos faltando`,
+      (c) => `cobertura ${c.pctStock}%, ${c.rupture.toLocaleString("pt-BR")} títulos faltando do top 150`,
       { ignorable: true }
     );
     renderPortfolioClientList(
       els.portfolioWorst,
       visibleAnalysisRows(overview.worstCoverage),
-      (c) => `cobertura ${c.pctStock}%`,
+      (c) => `cobertura ${c.pctStock}% do top 150`,
       { ignorable: true }
     );
     renderPortfolioClientList(
       els.portfolioRupture,
       visibleAnalysisRows(overview.mostRupture),
-      (c) => `${c.rupture.toLocaleString("pt-BR")} títulos do Top 150 sem saldo`,
+      (c) => `${c.rupture.toLocaleString("pt-BR")} títulos faltando do top 150`,
       { ignorable: true }
     );
     renderPortfolioClientList(
