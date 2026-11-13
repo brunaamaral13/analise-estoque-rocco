@@ -358,9 +358,18 @@
 
   function isReliableIsbn(isbn) {
     if (!isbn) return false;
-    if (!/^\d{9}[\dX]$|^\d{13}$/.test(isbn)) return false;
-    // Excel costuma truncar ISBN-13 em notação científica (muitos zeros no fim).
-    if (isbn.length === 13 && /0{5,}$/.test(isbn)) return false;
+    let id = String(isbn);
+    // Aceita ISBN-10 só se converter para um ISBN-13 de livro válido.
+    if (/^\d{9}[\dX]$/.test(id)) {
+      id = isbn10To13(id) || "";
+    }
+    if (!/^\d{13}$/.test(id)) return false;
+    // Livros usam prefixo GS1 978/979.
+    if (!/^97[89]/.test(id)) return false;
+    // Excel em notação científica costuma gerar sequências longas de zero
+    // (ex.: 9786555326253 → 9786560000001 / 6560000001).
+    if (/0{4,}/.test(id.slice(6))) return false;
+    if (/0{5,}$/.test(id)) return false;
     return true;
   }
 
@@ -861,6 +870,16 @@
     return "";
   }
 
+  function isbnQualityScore(isbn) {
+    if (!isReliableIsbn(isbn)) return 0;
+    const id = String(isbn);
+    // Prefere ISBN-13 completo; penaliza aparência truncada.
+    let score = id.length === 13 ? 20 : 10;
+    if (/^97865|^97885|^979/.test(id)) score += 5;
+    if (!/0{3,}/.test(id)) score += 3;
+    return score;
+  }
+
   function buildProductCatalog() {
     const byKey = new Map();
     const index = new Map();
@@ -886,13 +905,12 @@
       const codlivro = String(r.codlivro || "").trim();
       const titulo = r.titulo || "Sem título";
       const titleKey = normalizeTitle(titulo);
-      // Cruzar ISBN confiável + codlivro (Excel costuma corromper ISBN em notação científica).
-      // Título só entra como identidade quando não há ISBN nem código do livro.
+      // Cruzar ISBN confiável + codlivro + título (ISBN corrompido no Excel não cria produto paralelo).
       const ids = [
         isbn ? `isbn:${isbn}` : "",
         codlivro ? `cod:${codlivro}` : "",
+        titleKey ? `title:${titleKey}` : "",
       ].filter(Boolean);
-      if (!ids.length && titleKey) ids.push(`title:${titleKey}`);
       if (!ids.length) return;
 
       let key = resolveKey(ids);
@@ -909,7 +927,7 @@
         volume: 0,
         clients: new Set(),
       };
-      if (isbn) prev.isbn = isbn;
+      if (isbnQualityScore(isbn) > isbnQualityScore(prev.isbn)) prev.isbn = isbn;
       if (codlivro) prev.codlivro = codlivro;
       if ((!prev.titulo || prev.titulo === "Sem título") && r.titulo) {
         prev.titulo = r.titulo;
@@ -922,11 +940,38 @@
       registerIds(key, ids);
     });
 
-    return [...byKey.values()]
+    // Segunda passagem: se ainda restarem duplicatas do mesmo título, unifica no melhor ISBN.
+    const byTitle = new Map();
+    [...byKey.values()].forEach((item) => {
+      const tKey = item.titleKey || normalizeTitle(item.titulo);
+      if (!tKey) return;
+      const prev = byTitle.get(tKey);
+      if (!prev) {
+        byTitle.set(tKey, item);
+        return;
+      }
+      if (isbnQualityScore(item.isbn) > isbnQualityScore(prev.isbn)) {
+        item.volume += prev.volume;
+        prev.clients.forEach((c) => item.clients.add(c));
+        if (!item.codlivro && prev.codlivro) item.codlivro = prev.codlivro;
+        byTitle.set(tKey, item);
+      } else {
+        prev.volume += item.volume;
+        item.clients.forEach((c) => prev.clients.add(c));
+        if (!prev.codlivro && item.codlivro) prev.codlivro = item.codlivro;
+        if (isbnQualityScore(item.isbn) > isbnQualityScore(prev.isbn)) prev.isbn = item.isbn;
+      }
+    });
+
+    const merged = byTitle.size ? [...byTitle.values()] : [...byKey.values()];
+
+    return merged
       .map((item) => ({
-        key: item.key,
-        isbn: item.isbn,
-        codlivro: item.codlivro,
+        key: item.isbn && isReliableIsbn(item.isbn)
+          ? `isbn:${item.isbn}`
+          : (item.codlivro ? `cod:${item.codlivro}` : `title:${item.titleKey || normalizeTitle(item.titulo)}`),
+        isbn: item.isbn || "",
+        codlivro: item.codlivro || "",
         titulo: item.titulo,
         volume: item.volume,
         clientCount: item.clients.size,
@@ -1157,15 +1202,15 @@
       <div class="product-results-head">Clique para selecionar ou tirar a seleção</div>
       ${list.map((item) => {
         const selected = isProductSelected(item);
+        const isbnLabel = item.isbn || "Sem ISBN";
         const meta = [
-          item.isbn || "",
           `${item.clientCount.toLocaleString("pt-BR")} cliente(s)`,
           `Saldo ${item.volume.toLocaleString("pt-BR")}`,
-        ].filter(Boolean).join(" · ");
+        ].join(" · ");
         return `
-          <button type="button" class="product-result${selected ? " is-selected" : ""}" data-kind="${kind}" data-key="${escapeHtml(item.key)}" data-isbn="${escapeHtml(item.isbn || "")}" data-titulo="${escapeHtml(item.titulo || "")}" role="option" aria-selected="${selected}">
-            <strong>${escapeHtml(kind === "isbn" ? (item.isbn || item.titulo) : item.titulo)}</strong>
-            <span>${escapeHtml(kind === "isbn" ? (item.titulo || "—") : (item.isbn || "Sem ISBN"))}</span>
+          <button type="button" class="product-result${selected ? " is-selected" : ""}" data-kind="${kind}" data-key="${escapeHtml(item.key)}" data-isbn="${escapeHtml(item.isbn || "")}" data-titulo="${escapeHtml(item.titulo || "")}" data-codlivro="${escapeHtml(item.codlivro || "")}" role="option" aria-selected="${selected}">
+            <strong>${escapeHtml(kind === "isbn" ? isbnLabel : item.titulo)}</strong>
+            <span>${escapeHtml(kind === "isbn" ? (item.titulo || "—") : isbnLabel)}</span>
             <small>${escapeHtml(meta)}</small>
             <span class="pick-hint">${selected ? "Selecionado — clique para remover" : "Clique para selecionar"}</span>
           </button>
@@ -2730,6 +2775,7 @@
       toggleProductSelection({
         key: btn.dataset.key,
         isbn: btn.dataset.isbn || "",
+        codlivro: btn.dataset.codlivro || "",
         titulo: btn.dataset.titulo || "",
       });
       const kind = btn.dataset.kind === "isbn" ? "isbn" : "title";
