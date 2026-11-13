@@ -22,6 +22,7 @@
 
   const SELLERS = [
     "Bruna",
+    "Dani",
     "Geysa",
     "Gilsan",
     "Michael",
