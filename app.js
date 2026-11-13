@@ -106,7 +106,6 @@
     btnClearPortfolioFilter: document.getElementById("btnClearPortfolioFilter"),
     portfolioKpis: document.getElementById("portfolioKpis"),
     portfolioBands: document.getElementById("portfolioBands"),
-    portfolioOpp: document.getElementById("portfolioOpp"),
     portfolioRoteiro: document.getElementById("portfolioRoteiro"),
     portfolioWorst: document.getElementById("portfolioWorst"),
     portfolioRupture: document.getElementById("portfolioRupture"),
@@ -2335,23 +2334,6 @@
           </li>
         `;
       }).join("");
-    }
-
-    if (els.portfolioOpp) {
-      els.portfolioOpp.innerHTML = `
-        <div>
-          <dt>Potencial de reposição no Top 150 (até saldo 8)</dt>
-          <dd>${money(overview.potencial)}</dd>
-        </div>
-        <div>
-          <dt>Valor parado há 180 dias ou mais</dt>
-          <dd>${money(overview.valorParado)}</dd>
-        </div>
-        <div>
-          <dt>Títulos do Top 150 sem saldo em pelo menos ${CHRONIC_STORE_PCT}% das lojas</dt>
-          <dd>${overview.chronicTitleCount.toLocaleString("pt-BR")} títulos</dd>
-        </div>
-      `;
     }
 
     renderPortfolioClientList(

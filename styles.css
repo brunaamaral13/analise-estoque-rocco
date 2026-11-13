@@ -1187,7 +1187,7 @@ h1, h2, p { margin: 0; }
 
 .portfolio-mid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 .portfolio-lists {
@@ -1274,33 +1274,6 @@ h1, h2, p { margin: 0; }
   text-align: right;
   font-size: 12px;
   font-weight: 650;
-}
-.portfolio-opp {
-  margin: 12px 0 0;
-  display: grid;
-  gap: 10px;
-}
-.portfolio-opp div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--line);
-}
-.portfolio-opp div:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-.portfolio-opp dt {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-}
-.portfolio-opp dd {
-  margin: 0;
-  font-weight: 650;
-  font-size: 14px;
-  white-space: nowrap;
 }
 .portfolio-list {
   list-style: none;
