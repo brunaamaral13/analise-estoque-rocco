@@ -304,12 +304,47 @@
 
   function parseNumber(value) {
     if (value == null || value === "") return null;
-    let cleaned = String(value).trim();
-    if (/[eE][+-]?\d+/.test(cleaned)) {
-      cleaned = cleaned.replace(/\./g, "").replace(",", ".");
-    } else {
-      cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+
+    let cleaned = String(value).trim().replace(/\s/g, "");
+    if (!cleaned) return null;
+
+    // Notação científica (ex.: 9.49E+1).
+    if (/^[+-]?\d+(?:[.,]\d+)?[eE][+-]?\d+$/.test(cleaned)) {
+      const n = Number(cleaned.replace(",", "."));
+      return Number.isFinite(n) ? n : null;
     }
+
+    const hasComma = cleaned.includes(",");
+    const hasDot = cleaned.includes(".");
+
+    if (hasComma && hasDot) {
+      // Separador decimal é o que aparece por último: 1.234,56 (BR) ou 1,234.56 (US).
+      if (cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".")) {
+        cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+      } else {
+        cleaned = cleaned.replace(/,/g, "");
+      }
+    } else if (hasComma) {
+      // Vírgula sozinha: decimal brasileiro (94,9) ou, raro, milhar US (1,234).
+      const parts = cleaned.split(",");
+      if (parts.length === 2 && parts[1].length <= 2) {
+        cleaned = `${parts[0].replace(/\./g, "")}.${parts[1]}`;
+      } else if (parts.length > 1 && parts.slice(1).every((p) => p.length === 3)) {
+        cleaned = parts.join("");
+      } else {
+        cleaned = cleaned.replace(",", ".");
+      }
+    } else if (hasDot) {
+      // Ponto sozinho: decimal do Excel/JS (94.9) OU milhar brasileiro (1.234).
+      const parts = cleaned.split(".");
+      if (parts.length === 2 && parts[1].length > 0 && parts[1].length <= 2) {
+        // Mantém ponto decimal (94.9 / 94.90).
+      } else if (parts.length > 1 && parts.slice(1).every((p) => p.length === 3)) {
+        cleaned = parts.join("");
+      }
+    }
+
     const n = Number(cleaned);
     return Number.isFinite(n) ? n : null;
   }
@@ -518,8 +553,8 @@
           ? String(Math.round(value))
           : value.toLocaleString("fullwide", { useGrouping: false });
       }
-      // Preço e percentuais: mantém casas, no formato que o parseNumber já lê.
-      return String(value);
+      // Preço/percentuais: ponto decimal sem milhar (parseNumber trata 94.9 corretamente).
+      return value.toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 12 });
     }
     return String(value).trim();
   }
