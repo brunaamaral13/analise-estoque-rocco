@@ -108,6 +108,8 @@
     portfolioScope: document.getElementById("portfolioScope"),
     btnClearPortfolioFilter: document.getElementById("btnClearPortfolioFilter"),
     portfolioKpis: document.getElementById("portfolioKpis"),
+    btnPortfolioDetails: document.getElementById("btnPortfolioDetails"),
+    portfolioDetails: document.getElementById("portfolioDetails"),
     portfolioBands: document.getElementById("portfolioBands"),
     portfolioRoteiro: document.getElementById("portfolioRoteiro"),
     portfolioWorst: document.getElementById("portfolioWorst"),
@@ -148,6 +150,7 @@
     mapaQuality: null,
     mapaIsbnQuality: null,
     portfolioOverview: null,
+    portfolioDetailsOpen: false,
     portfolioClientFilter: null,
     ignoredAnalysisClients: loadIgnoredSet(IGNORED_ANALYSIS_STORAGE_KEY),
     ignoredChronicTitles: loadIgnoredSet(IGNORED_CHRONIC_STORAGE_KEY),
@@ -2294,6 +2297,19 @@
     }
   }
 
+  function syncPortfolioDetailsOpen() {
+    const open = Boolean(state.portfolioDetailsOpen);
+    if (els.portfolioDetails) els.portfolioDetails.hidden = !open;
+    if (els.btnPortfolioDetails) {
+      els.btnPortfolioDetails.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+  }
+
+  function togglePortfolioDetails() {
+    state.portfolioDetailsOpen = !state.portfolioDetailsOpen;
+    syncPortfolioDetailsOpen();
+  }
+
   function renderPortfolioOverview(overviewArg) {
     if (!els.portfolioOverview) return;
     const overview = overviewArg || ensurePortfolioOverview();
@@ -2301,6 +2317,8 @@
       els.portfolioOverview.hidden = true;
       return;
     }
+
+    syncPortfolioDetailsOpen();
 
     const filter = state.portfolioClientFilter;
     const filterActive = Boolean(filter);
@@ -2979,6 +2997,10 @@
 
   if (els.btnClearPortfolioFilter) {
     els.btnClearPortfolioFilter.addEventListener("click", () => clearPortfolioClientFilter());
+  }
+
+  if (els.btnPortfolioDetails) {
+    els.btnPortfolioDetails.addEventListener("click", () => togglePortfolioDetails());
   }
 
   if (els.portfolioOverview) {

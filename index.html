@@ -291,56 +291,69 @@
 
           <div class="portfolio-kpis" id="portfolioKpis"></div>
 
-          <div class="portfolio-mid">
-            <section class="portfolio-panel" aria-labelledby="portfolioBandsTitle">
-              <h3 id="portfolioBandsTitle">Faixas de cobertura do Top 150</h3>
-              <p class="portfolio-panel-sub">Quantas lojas estão em cada faixa. Clique para filtrar a lista de clientes.</p>
-              <ul class="portfolio-bands" id="portfolioBands"></ul>
+          <button
+            type="button"
+            class="portfolio-expand-toggle"
+            id="btnPortfolioDetails"
+            aria-expanded="false"
+            aria-controls="portfolioDetails"
+          >
+            <span class="portfolio-expand-icon" aria-hidden="true"></span>
+            <span>Pontos de atenção - cobertura</span>
+          </button>
+
+          <div class="portfolio-details" id="portfolioDetails" hidden>
+            <div class="portfolio-mid">
+              <section class="portfolio-panel" aria-labelledby="portfolioBandsTitle">
+                <h3 id="portfolioBandsTitle">Faixas de cobertura do Top 150</h3>
+                <p class="portfolio-panel-sub">Quantas lojas estão em cada faixa. Clique para filtrar a lista de clientes.</p>
+                <ul class="portfolio-bands" id="portfolioBands"></ul>
+              </section>
+            </div>
+
+            <section class="portfolio-panel portfolio-roteiro" aria-labelledby="portfolioRoteiroTitle">
+              <h3 id="portfolioRoteiroTitle">Roteiro do dia da carteira</h3>
+              <p class="portfolio-panel-sub">Comece por estas lojas: pior cobertura e mais títulos faltando no Top 150</p>
+              <ol class="portfolio-list" id="portfolioRoteiro"></ol>
+            </section>
+
+            <div class="portfolio-lists">
+              <section class="portfolio-panel" aria-labelledby="portfolioWorstTitle">
+                <h3 id="portfolioWorstTitle">Prioridade: pior cobertura do Top 150</h3>
+                <p class="portfolio-panel-sub">Lojas que têm menos títulos do Top 150 em estoque. Clique para abrir.</p>
+                <ol class="portfolio-list" id="portfolioWorst"></ol>
+              </section>
+              <section class="portfolio-panel" aria-labelledby="portfolioRuptureTitle">
+                <h3 id="portfolioRuptureTitle">Prioridade: maior ruptura</h3>
+                <p class="portfolio-panel-sub">Lojas com mais títulos do Top 150 sem saldo. Clique para abrir.</p>
+                <ol class="portfolio-list" id="portfolioRupture"></ol>
+              </section>
+              <section class="portfolio-panel" aria-labelledby="portfolioIdleTitle">
+                <h3 id="portfolioIdleTitle">Prioridade: valor parado há 180 dias ou mais</h3>
+                <p class="portfolio-panel-sub">Candidatos a devolução. Clique para abrir o cliente.</p>
+                <ol class="portfolio-list" id="portfolioIdle"></ol>
+              </section>
+            </div>
+
+            <section class="portfolio-panel" aria-labelledby="portfolioChronicTitle">
+              <h3 id="portfolioChronicTitle">Títulos crônicos na carteira</h3>
+              <p class="portfolio-panel-sub">Títulos do Top 150 sem saldo em pelo menos 30% das lojas. Clique para ver quem ainda tem o item. Ignore esgotados para ver o próximo.</p>
+              <ol class="portfolio-list" id="portfolioChronic"></ol>
+            </section>
+
+            <section class="portfolio-panel portfolio-ignored" id="portfolioIgnoredPanel" hidden aria-labelledby="portfolioIgnoredTitle">
+              <h3 id="portfolioIgnoredTitle">Desconsiderados na análise</h3>
+              <p class="portfolio-panel-sub">Fora do roteiro, prioridades e títulos crônicos; continuam no overview e no Mapão.</p>
+              <div id="portfolioIgnoredClientsWrap" hidden>
+                <h4 class="portfolio-ignored-label">Lojas</h4>
+                <ol class="portfolio-list" id="portfolioIgnored"></ol>
+              </div>
+              <div id="portfolioIgnoredChronicWrap" hidden>
+                <h4 class="portfolio-ignored-label">Títulos crônicos</h4>
+                <ol class="portfolio-list" id="portfolioIgnoredChronic"></ol>
+              </div>
             </section>
           </div>
-
-          <section class="portfolio-panel portfolio-roteiro" aria-labelledby="portfolioRoteiroTitle">
-            <h3 id="portfolioRoteiroTitle">Roteiro do dia da carteira</h3>
-            <p class="portfolio-panel-sub">Comece por estas lojas: pior cobertura e mais títulos faltando no Top 150</p>
-            <ol class="portfolio-list" id="portfolioRoteiro"></ol>
-          </section>
-
-          <div class="portfolio-lists">
-            <section class="portfolio-panel" aria-labelledby="portfolioWorstTitle">
-              <h3 id="portfolioWorstTitle">Prioridade: pior cobertura do Top 150</h3>
-              <p class="portfolio-panel-sub">Lojas que têm menos títulos do Top 150 em estoque. Clique para abrir.</p>
-              <ol class="portfolio-list" id="portfolioWorst"></ol>
-            </section>
-            <section class="portfolio-panel" aria-labelledby="portfolioRuptureTitle">
-              <h3 id="portfolioRuptureTitle">Prioridade: maior ruptura</h3>
-              <p class="portfolio-panel-sub">Lojas com mais títulos do Top 150 sem saldo. Clique para abrir.</p>
-              <ol class="portfolio-list" id="portfolioRupture"></ol>
-            </section>
-            <section class="portfolio-panel" aria-labelledby="portfolioIdleTitle">
-              <h3 id="portfolioIdleTitle">Prioridade: valor parado há 180 dias ou mais</h3>
-              <p class="portfolio-panel-sub">Candidatos a devolução. Clique para abrir o cliente.</p>
-              <ol class="portfolio-list" id="portfolioIdle"></ol>
-            </section>
-          </div>
-
-          <section class="portfolio-panel" aria-labelledby="portfolioChronicTitle">
-            <h3 id="portfolioChronicTitle">Títulos crônicos na carteira</h3>
-            <p class="portfolio-panel-sub">Títulos do Top 150 sem saldo em pelo menos 30% das lojas. Clique para ver quem ainda tem o item. Ignore esgotados para ver o próximo.</p>
-            <ol class="portfolio-list" id="portfolioChronic"></ol>
-          </section>
-
-          <section class="portfolio-panel portfolio-ignored" id="portfolioIgnoredPanel" hidden aria-labelledby="portfolioIgnoredTitle">
-            <h3 id="portfolioIgnoredTitle">Desconsiderados na análise</h3>
-            <p class="portfolio-panel-sub">Fora do roteiro, prioridades e títulos crônicos; continuam no overview e no Mapão.</p>
-            <div id="portfolioIgnoredClientsWrap" hidden>
-              <h4 class="portfolio-ignored-label">Lojas</h4>
-              <ol class="portfolio-list" id="portfolioIgnored"></ol>
-            </div>
-            <div id="portfolioIgnoredChronicWrap" hidden>
-              <h4 class="portfolio-ignored-label">Títulos crônicos</h4>
-              <ol class="portfolio-list" id="portfolioIgnoredChronic"></ol>
-            </div>
-          </section>
         </div>
 
         <table class="grid" id="grid" hidden>
@@ -363,6 +376,6 @@
   </div>
 
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="app.js?v=20261113preco"></script>
+  <script src="app.js?v=20261123collapse"></script>
 </body>
 </html>
