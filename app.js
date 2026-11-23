@@ -111,7 +111,6 @@
     btnPortfolioDetails: document.getElementById("btnPortfolioDetails"),
     portfolioDetails: document.getElementById("portfolioDetails"),
     portfolioBands: document.getElementById("portfolioBands"),
-    portfolioRoteiro: document.getElementById("portfolioRoteiro"),
     portfolioRupture: document.getElementById("portfolioRupture"),
     portfolioIdle: document.getElementById("portfolioIdle"),
     portfolioIgnoredPanel: document.getElementById("portfolioIgnoredPanel"),
@@ -2100,8 +2099,6 @@
       .sort((a, b) => b.rupture - a.rupture || a.pctStock - b.pctStock || byName(a, b));
     const mostIdleValue = [...clientRows]
       .sort((a, b) => b.valorParado - a.valorParado || byName(a, b));
-    const roteiro = [...clientRows]
-      .sort((a, b) => b.score - a.score || a.pctStock - b.pctStock || byName(a, b));
 
     return {
       // Escopo do cache: vendedor do Mapão usado no cálculo.
@@ -2124,7 +2121,6 @@
       valorIdle90: sumValorIdle90,
       chronicTitleCount: chronicAll.length,
       clientRows,
-      roteiro,
       mostRupture,
       mostIdleValue,
       chronicTitles,
@@ -2435,12 +2431,6 @@
       }).join("");
     }
 
-    renderPortfolioClientList(
-      els.portfolioRoteiro,
-      visibleAnalysisRows(overview.roteiro),
-      (c) => `cobertura ${c.pctStock}% do top 150`,
-      { ignorable: true }
-    );
     renderPortfolioClientList(
       els.portfolioRupture,
       visibleAnalysisRows(overview.mostRupture),
