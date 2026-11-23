@@ -1511,6 +1511,26 @@ button.portfolio-ignore-btn.is-restore:hover {
   border-bottom: 1px solid var(--line);
   background: #fafbfe;
 }
+.grid-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.grid.is-consignado-only th[data-sort="comprado"],
+.grid.is-consignado-only th[data-sort="total"],
+.grid.is-consignado-only th[data-sort="fisico"],
+.grid.is-consignado-only td.col-comprado,
+.grid.is-consignado-only td.col-total,
+.grid.is-consignado-only td.col-fisico {
+  display: none;
+}
+.grid-expand-btn[aria-pressed="true"] {
+  border-color: rgba(181, 25, 26, 0.4);
+  background: rgba(181, 25, 26, 0.06);
+  color: var(--red-deep);
+}
 .grid-toolbar-title {
   margin: 0;
   font-size: 13px;

@@ -103,6 +103,7 @@
     gridPanel: document.getElementById("gridPanel"),
     grid: document.getElementById("grid"),
     btnExpandGrid: document.getElementById("btnExpandGrid"),
+    btnToggleStockCols: document.getElementById("btnToggleStockCols"),
     tbody: document.getElementById("tbody"),
     portfolioOverview: document.getElementById("portfolioOverview"),
     portfolioTitle: document.getElementById("portfolioTitle"),
@@ -152,6 +153,7 @@
     portfolioOverview: null,
     portfolioDetailsOpen: false,
     gridExpanded: false,
+    consignadoOnlyCols: false,
     portfolioClientFilter: null,
     ignoredAnalysisClients: loadIgnoredSet(IGNORED_ANALYSIS_STORAGE_KEY),
     ignoredChronicTitles: loadIgnoredSet(IGNORED_CHRONIC_STORAGE_KEY),
@@ -2423,6 +2425,26 @@
     setGridExpanded(!state.gridExpanded);
   }
 
+  function syncConsignadoOnlyCols() {
+    const only = Boolean(state.consignadoOnlyCols);
+    if (els.grid) els.grid.classList.toggle("is-consignado-only", only);
+    if (els.btnToggleStockCols) {
+      els.btnToggleStockCols.setAttribute("aria-pressed", only ? "true" : "false");
+      const label = els.btnToggleStockCols.querySelector(".grid-stock-cols-label");
+      if (label) {
+        label.textContent = only ? "Mostrar estoque extra" : "Ocultar estoque extra";
+      }
+      els.btnToggleStockCols.title = only
+        ? "Mostrar estoque comprado, total e estoque físico"
+        : "Ocultar estoque comprado, total e estoque físico (só consignado)";
+    }
+  }
+
+  function toggleConsignadoOnlyCols() {
+    state.consignadoOnlyCols = !state.consignadoOnlyCols;
+    syncConsignadoOnlyCols();
+  }
+
   function renderPortfolioOverview(overviewArg) {
     if (!els.portfolioOverview) return;
     const overview = overviewArg || ensurePortfolioOverview();
@@ -2942,6 +2964,7 @@
     if (els.portfolioOverview) els.portfolioOverview.hidden = !portfolioData;
     if (els.gridPanel) els.gridPanel.hidden = !hasClient;
     if (!hasClient && state.gridExpanded) setGridExpanded(false);
+    syncConsignadoOnlyCols();
     if (els.summary) els.summary.hidden = !hasClient;
     if (els.actions) els.actions.hidden = !hasClient;
     if (els.filters) els.filters.hidden = !hasClient;
@@ -3007,9 +3030,9 @@
           <td><span class="isbn">${escapeHtml(row.isbn)}</span></td>
           <td class="num">${money(preco)}</td>
           <td class="num">${consignado == null ? "—" : consignado.toLocaleString("pt-BR")}</td>
-          <td class="num">${comprado == null ? "—" : comprado.toLocaleString("pt-BR")}</td>
-          <td class="num ${total === 0 ? "saldo-zero" : ""}">${total == null ? "—" : total.toLocaleString("pt-BR")}</td>
-          <td class="num">${fisico == null ? "—" : fisico.toLocaleString("pt-BR")}</td>
+          <td class="num col-comprado">${comprado == null ? "—" : comprado.toLocaleString("pt-BR")}</td>
+          <td class="num col-total ${total === 0 ? "saldo-zero" : ""}">${total == null ? "—" : total.toLocaleString("pt-BR")}</td>
+          <td class="num col-fisico">${fisico == null ? "—" : fisico.toLocaleString("pt-BR")}</td>
           <td class="num fdias">${fdias == null ? "—" : fdias.toLocaleString("pt-BR")}</td>
           <td class="num">${vendido == null ? "—" : vendido.toLocaleString("pt-BR")}</td>
           <td><span class="badge ${row.sit.className}">${row.sit.label}</span></td>
@@ -3114,6 +3137,10 @@
 
   if (els.btnExpandGrid) {
     els.btnExpandGrid.addEventListener("click", () => toggleGridExpanded());
+  }
+
+  if (els.btnToggleStockCols) {
+    els.btnToggleStockCols.addEventListener("click", () => toggleConsignadoOnlyCols());
   }
 
   document.addEventListener("keydown", (e) => {
