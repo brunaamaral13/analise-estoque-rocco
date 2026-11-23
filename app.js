@@ -539,15 +539,17 @@
       .replace(/[\s_-]+/g, "");
   }
 
-  /** Lê estoque próprio/comprado do Mapão (coluna opcional). */
+  /** Lê estoque físico/próprio/comprado do Mapão (coluna opcional). */
   function ownStockFromRow(row) {
     if (!row || typeof row !== "object") return 0;
     const aliases = new Set([
+      "estoquefisico",
       "estoqueproprio",
       "estoquecomprado",
       "estoquetotalproprio",
       "comprado",
       "proprio",
+      "fisico",
     ].map(normalizeHeaderKey));
     for (const [key, raw] of Object.entries(row)) {
       if (!aliases.has(normalizeHeaderKey(key))) continue;
@@ -556,7 +558,7 @@
     return 0;
   }
 
-  /** Saldo total na loja: consignado + próprio. */
+  /** Saldo total na loja: consignado + estoque físico. */
   function stockQty(stock) {
     if (!stock) return 0;
     return (stock.consignado || 0) + (stock.estoqueproprio || 0);
