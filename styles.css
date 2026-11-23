@@ -1663,8 +1663,14 @@ body.is-grid-expanded .badge {
   align-items: center;
   gap: 6px;
   cursor: pointer;
+  white-space: normal;
+  line-height: 1.25;
+  text-align: left;
 }
-.grid th.num.sortable button { justify-content: flex-end; }
+.grid th.num.sortable button {
+  justify-content: flex-end;
+  text-align: right;
+}
 .grid th.sortable button::after {
   content: "↕";
   font-size: 11px;

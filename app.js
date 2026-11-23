@@ -542,6 +542,15 @@
       .replace(/[\s_-]+/g, "");
   }
 
+  /** Cabeçalho canônico: minúsculo e sem acento (ex.: Título → titulo). */
+  function canonicalHeader(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
   /** Lê estoque físico/próprio/comprado do Mapão (coluna opcional). */
   function ownStockFromRow(row) {
     if (!row || typeof row !== "object") return 0;
@@ -569,12 +578,13 @@
 
   function matrixToObjects(matrix) {
     if (!matrix.length) return [];
-    const headers = matrix[0].map((h) => String(h || "").trim().toLowerCase());
+    const headers = matrix[0].map((h) => canonicalHeader(h));
     return matrix.slice(1)
       .filter((r) => r.some((c) => String(c ?? "").trim() !== ""))
       .map((r) => {
         const obj = {};
         headers.forEach((h, idx) => {
+          if (!h) return;
           obj[h] = r[idx] == null ? "" : String(r[idx]).trim();
         });
         return obj;
@@ -694,7 +704,7 @@
     const headers = [];
     for (let c = range.s.c; c <= range.e.c; c += 1) {
       const addr = XLSX.utils.encode_cell({ r: range.s.r, c });
-      headers.push(String(readExcelCell(sheet[addr], "") || "").trim().toLowerCase());
+      headers.push(canonicalHeader(readExcelCell(sheet[addr], "") || ""));
     }
 
     const objects = [];
@@ -769,14 +779,17 @@
       const rows = parseCsv(text);
 
       state.ranking = rows
-        .map((r) => ({
-          isbn: normalizeIsbn(r.isbn),
-          aliases: isbnAliases(r.isbn),
-          titulo: r.titulo || "",
-          titleKey: normalizeTitle(r.titulo || ""),
-          autor: r.autor || "",
-          ranking: parseIntSafe(r.ranking),
-        }))
+        .map((r) => {
+          const titulo = r.titulo || r.title || "";
+          return {
+            isbn: normalizeIsbn(r.isbn),
+            aliases: isbnAliases(r.isbn),
+            titulo,
+            titleKey: normalizeTitle(titulo),
+            autor: r.autor || r.author || "",
+            ranking: parseIntSafe(r.ranking),
+          };
+        })
         .filter((r) => r.isbn && r.ranking != null && r.ranking > 0)
         .sort((a, b) => a.ranking - b.ranking);
 
