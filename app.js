@@ -20,6 +20,7 @@
       urgentMax: 15,
       alertMax: 29,
       targetOk: 30,
+      fisicoHigh: 200,
     },
   };
   const HIGH_RUPTURE_PCT = 40;
@@ -1764,9 +1765,23 @@
       };
     }
 
+    // Distribuidor: físico alto no CD → melhorar distribuição (não altera livraria).
+    const mode = coverageThresholds();
+    if (
+      mode.key === "distribuidor"
+      && stock.hasEstoqueFisico
+      && (stock.estoquefisico || 0) > (mode.fisicoHigh || 200)
+    ) {
+      return {
+        key: "distribute",
+        label: "Melhorar<br>distribuição",
+        className: "badge-distribute",
+      };
+    }
+
     // Reposição do Top 150: limiares conforme Livraria ou Distribuidor.
     if (inTop150) {
-      const { urgentMax, alertMax } = coverageThresholds();
+      const { urgentMax, alertMax } = mode;
       if (saldo <= urgentMax) return { key: "urgent", label: "Repor com<br>urgência", className: "badge-urgent" };
       if (saldo <= alertMax) return { key: "alert", label: "Alerta<br>reposição", className: "badge-alert" };
     }
@@ -1991,7 +2006,7 @@
     if (state.filter === "extra" && row.inRanking) return false;
     if (
       state.filter === "com"
-      && !["ok", "idle", "idle180", "alert", "urgent"].includes(row.sit.key)
+      && !["ok", "idle", "idle180", "alert", "urgent", "distribute"].includes(row.sit.key)
     ) return false;
     if (
       state.filter === "sem"
@@ -2000,6 +2015,7 @@
     ) return false;
     if (state.filter === "urgent" && row.sit.key !== "urgent") return false;
     if (state.filter === "alert" && row.sit.key !== "alert") return false;
+    if (state.filter === "distribute" && row.sit.key !== "distribute") return false;
     if (state.filter === "parado90") {
       if ((row.stock?.consignado || 0) <= 0) return false;
       if ((row.stock?.fdias || 0) < IDLE_DAYS) return false;
@@ -2834,13 +2850,14 @@
     sem: "Sem estoque",
     urgent: "Repor com urgência",
     alert: "Alerta reposição",
+    distribute: "Melhorar distribuição",
     parado90: "Puxar acerto/pedir devolução (90+ dias)",
     parado180: "Pedir devolução (180+ dias)",
   };
 
   function filterTone(filterKey) {
     if (filterKey === "urgent" || filterKey === "sem") return "is-danger";
-    if (filterKey === "alert" || filterKey === "parado90" || filterKey === "parado180") return "is-warn";
+    if (filterKey === "alert" || filterKey === "parado90" || filterKey === "parado180" || filterKey === "distribute") return "is-warn";
     return "";
   }
 

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Outfit:wght@360;460;560;650&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261123mode">
+  <link rel="stylesheet" href="styles.css?v=20261123dist">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b5191a'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -271,6 +271,10 @@
           <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8 21 19.2H3L12 3.8Z"/><path d="M12 9.4v5M12 16.6v.8"/></svg>
           Alerta reposição
         </button>
+        <button type="button" class="chip" data-filter="distribute">
+          <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16"/><path d="m14 6 6 6-6 6"/><path d="M8 8v8"/></svg>
+          Melhorar distribuição
+        </button>
         <button type="button" class="chip" data-filter="parado90">
           <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 7.2A6.2 6.2 0 0 1 18 10"/><path d="M16.8 7.5 18 10l-2.5.4"/><path d="M16.8 16.8A6.2 6.2 0 0 1 6 14"/><path d="M7.2 16.5 6 14l2.5-.4"/></svg>
           Puxar acerto/pedir devolução (90+)
@@ -367,6 +371,7 @@
               <button type="button" class="grid-sit-btn is-active" data-filter="all" aria-pressed="true">Todos</button>
               <button type="button" class="grid-sit-btn is-urgent" data-filter="urgent" aria-pressed="false">Repor com urgência</button>
               <button type="button" class="grid-sit-btn is-alert" data-filter="alert" aria-pressed="false">Alerta reposição</button>
+              <button type="button" class="grid-sit-btn is-distribute" data-filter="distribute" aria-pressed="false">Melhorar distribuição</button>
               <button type="button" class="grid-sit-btn is-idle" data-filter="parado90" aria-pressed="false">Puxar acerto / devolução</button>
               <button type="button" class="grid-sit-btn is-return" data-filter="parado180" aria-pressed="false">Pedir devolução</button>
               <button type="button" class="grid-sit-btn is-zero" data-filter="sem" aria-pressed="false">Sem estoque</button>
@@ -408,6 +413,6 @@
   </div>
 
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="app.js?v=20261123mode"></script>
+  <script src="app.js?v=20261123dist"></script>
 </body>
 </html>

@@ -1703,6 +1703,11 @@ button.portfolio-ignore-btn.is-restore:hover {
   color: var(--green);
   border-color: rgba(34, 120, 80, 0.22);
 }
+.grid-sit-btn.is-distribute {
+  background: #fde8d8;
+  color: #9a3f12;
+  border-color: rgba(154, 63, 18, 0.22);
+}
 .grid-toolbar-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1981,6 +1986,7 @@ body.is-grid-expanded .badge {
   max-width: 110px;
 }
 .badge-ok { background: #e7f6ef; color: var(--green); }
+.badge-distribute { background: #fde8d8; color: #9a3f12; }
 .badge-zero,
 .badge-urgent { background: #fdecee; color: var(--down); }
 .badge-alert { background: #fff4d6; color: #7a5608; }
