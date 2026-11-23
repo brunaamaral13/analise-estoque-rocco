@@ -122,6 +122,7 @@
     gridPanel: document.getElementById("gridPanel"),
     grid: document.getElementById("grid"),
     btnExpandGrid: document.getElementById("btnExpandGrid"),
+    btnExportGrid: document.getElementById("btnExportGrid"),
     btnToggleStockCols: document.getElementById("btnToggleStockCols"),
     gridSitFilters: document.getElementById("gridSitFilters"),
     btnHideSidebar: document.getElementById("btnHideSidebar"),
@@ -2071,6 +2072,56 @@
       .sort(compareRows);
   }
 
+  function situationPlain(row) {
+    return String(row.sit?.label || "")
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function exportFilteredGrid() {
+    if (typeof XLSX === "undefined") return;
+    const rows = rowsForRender();
+    if (!rows.length) return;
+    const data = rows.map((row) => {
+      const stock = row.stock;
+      const promo = promoPctForRow(row);
+      return {
+        "Ranking Rocco": row.inRanking ? row.ranking : "Fora",
+        "Título": row.titulo || "",
+        "Autor": row.autor || (row.inRanking ? "—" : "Somente no Mapão"),
+        "ISBN": row.isbn && row.isbn !== "—" ? String(row.isbn) : "",
+        "Preço": stock?.preco == null ? null : stock.preco,
+        "Promoção (%)": promo == null ? null : promo,
+        "Consignado": stock ? (stock.consignado || 0) : null,
+        "Estoque comprado": stock ? (stock.estoquecomprado || 0) : null,
+        "Total": stock ? stockQty(stock) : null,
+        "Estoque físico": stock ? (stock.estoquefisico || 0) : null,
+        "Dias sem giro": stock?.fdias == null ? null : stock.fdias,
+        "Vendido": stock?.vendido == null ? null : stock.vendido,
+        "Situação": situationPlain(row),
+      };
+    });
+    const sheet = XLSX.utils.json_to_sheet(data);
+    for (let r = 1; r <= data.length; r += 1) {
+      const cell = sheet[XLSX.utils.encode_cell({ r, c: 3 })];
+      if (!cell || cell.v == null || cell.v === "") continue;
+      cell.t = "s";
+      cell.v = String(cell.v);
+      delete cell.w;
+    }
+    sheet["!cols"] = [
+      { wch: 14 }, { wch: 42 }, { wch: 28 }, { wch: 16 },
+      { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 18 },
+      { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 28 },
+    ];
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, "Cruzamento");
+    const code = String(state.selectedClient?.codigo || "cliente").replace(/[^\w.-]+/g, "-");
+    const day = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(book, `cruzamento-${code}-${day}.xlsx`);
+  }
+
   function updateSortHeaders() {
     els.grid.querySelectorAll("th.sortable").forEach((th) => {
       const key = th.dataset.sort;
@@ -3214,6 +3265,7 @@
     updateKpis(scopedRows);
     if (els.actions) updateActionKpis(scopedRows);
     updateSummary(rows);
+    if (els.btnExportGrid) els.btnExportGrid.disabled = rows.length === 0;
     els.tbody.innerHTML = rows.map((row) => {
       const consignado = row.stock ? (row.stock.consignado || 0) : null;
       const comprado = row.stock ? (row.stock.estoquecomprado || 0) : null;
@@ -3357,6 +3409,10 @@
 
   if (els.btnToggleStockCols) {
     els.btnToggleStockCols.addEventListener("click", () => toggleConsignadoOnlyCols());
+  }
+
+  if (els.btnExportGrid) {
+    els.btnExportGrid.addEventListener("click", () => exportFilteredGrid());
   }
 
   if (els.btnHideSidebar) {
