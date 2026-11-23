@@ -911,7 +911,10 @@
       els.rankMeta.textContent = `${state.ranking.length.toLocaleString("pt-BR")} títulos no ranking (1 a ${last})`;
       // Ranking novo: agregados da carteira precisam ser recalculados.
       invalidatePortfolioOverview();
-      if (state.clients.length) render();
+      if (state.clients.length) {
+        if (isPortalContext()) selectPortalClientAuto();
+        else render();
+      }
     } catch (err) {
       console.error(err);
       els.rankMeta.textContent = "Não foi possível carregar o ranking. Abra o dashboard por um servidor local (não pelo file://).";
@@ -937,8 +940,11 @@
       if (state.selectedClient?.codigo && state.mapaRows.length) {
         selectClient(state.selectedClient.codigo);
       } else if (state.clients.length) {
-        invalidatePortfolioOverview();
-        render();
+        if (isPortalContext()) selectPortalClientAuto();
+        else {
+          invalidatePortfolioOverview();
+          render();
+        }
       }
     } catch (err) {
       console.error(err);
@@ -4057,12 +4063,34 @@
 
   const portalMode = new URLSearchParams(location.search).get("portal") === "1";
 
+  function isPortalContext() {
+    return portalMode || document.body.classList.contains("is-portal");
+  }
+
+  function selectPortalClientAuto() {
+    if (!isPortalContext() || !state.clients?.length) return false;
+    const code = state.clients[0]?.codigo;
+    if (!code) return false;
+    if (state.selectedClient?.codigo === String(code)) return true;
+    selectClient(code);
+    return Boolean(state.selectedClient);
+  }
+
+  // Expõe para o shell do portal forçar o cruzamento via iframe
+  window.__portalSelectFirstClient = selectPortalClientAuto;
+
   async function ingestMapaBuffer(buffer, name) {
     const fileName = name || "mapa.xlsx";
     const file = new File([buffer], fileName, {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
     await onMapaFile(file);
+    // Portal: abre direto no cruzamento do cliente (Mapão Catavento)
+    selectPortalClientAuto();
+    requestAnimationFrame(() => selectPortalClientAuto());
+    setTimeout(() => selectPortalClientAuto(), 250);
+    setTimeout(() => selectPortalClientAuto(), 1000);
+    setTimeout(() => selectPortalClientAuto(), 2500);
   }
 
   function enterPortalClient(label) {
@@ -4113,6 +4141,10 @@
             message: err?.message || "Não foi possível carregar o Mapão.",
           }, location.origin);
         }
+      }
+      if (data.type === "estoque-select-first") {
+        document.body.classList.add("is-portal");
+        selectPortalClientAuto();
       }
     });
     loadRanking();
