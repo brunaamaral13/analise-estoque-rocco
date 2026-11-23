@@ -2057,3 +2057,18 @@ body.is-grid-expanded .badge {
   .title-search-wrap,
   .search { width: 100%; }
 }
+
+/* Portal do cliente: sem importação; exportação permanece */
+body.is-portal .seller-gate { display: none !important; }
+body.is-portal #btnImport,
+body.is-portal #btnImportMain,
+body.is-portal #btnChangeSeller,
+body.is-portal #fileMapa {
+  display: none !important;
+}
+body.is-portal .panel-import .panel-note {
+  margin-top: 0;
+}
+body.is-portal #btnExportGrid {
+  display: inline-flex;
+}
