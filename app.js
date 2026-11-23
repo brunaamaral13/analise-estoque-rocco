@@ -554,13 +554,14 @@
   }
 
   function stockFieldFromRow(row, aliases) {
-    if (!row || typeof row !== "object") return 0;
+    if (!row || typeof row !== "object") return { value: 0, present: false };
     const want = new Set(aliases.map(normalizeHeaderKey));
     for (const [key, raw] of Object.entries(row)) {
       if (!want.has(normalizeHeaderKey(key))) continue;
-      return parseIntSafe(raw) || 0;
+      if (raw == null || String(raw).trim() === "") continue;
+      return { value: parseIntSafe(raw) || 0, present: true };
     }
-    return 0;
+    return { value: 0, present: false };
   }
 
   /** Estoque comprado do Mapão (soma no total com consignado). */
@@ -586,10 +587,25 @@
     ]);
   }
 
-  /** Saldo total para cobertura: consignado + estoque comprado. */
+  /** Coluna Total: consignado + estoque comprado. */
   function stockQty(stock) {
     if (!stock) return 0;
     return (stock.consignado || 0) + (stock.estoquecomprado || 0);
+  }
+
+  /**
+   * Saldo usado na Situação / cobertura:
+   * 1) estoque físico, se informado
+   * 2) senão consignado + estoque comprado, se comprado informado
+   * 3) senão só consignado
+   */
+  function situationQty(stock) {
+    if (!stock) return 0;
+    if (stock.hasEstoqueFisico) return stock.estoquefisico || 0;
+    if (stock.hasEstoqueComprado) {
+      return (stock.consignado || 0) + (stock.estoquecomprado || 0);
+    }
+    return stock.consignado || 0;
   }
 
   function matrixToObjects(matrix) {
@@ -900,6 +916,8 @@
           consignado: 0,
           estoquecomprado: 0,
           estoquefisico: 0,
+          hasEstoqueComprado: false,
+          hasEstoqueFisico: false,
           valorLiquido: 0,
           fdias: null,
           vendido: 0,
@@ -907,15 +925,21 @@
         };
 
         const qty = parseIntSafe(r.consignado) || 0;
-        const comprado = purchasedStockFromRow(r);
-        const fisico = physicalStockFromRow(r);
+        const compradoInfo = purchasedStockFromRow(r);
+        const fisicoInfo = physicalStockFromRow(r);
         const preco = coverPriceForRow(r);
         const desconto = parseNumber(r.perdesconto) || 0;
         const fator = Math.max(0, 1 - desconto / 100);
 
         prev.consignado += qty;
-        prev.estoquecomprado += comprado;
-        prev.estoquefisico += fisico;
+        if (compradoInfo.present) {
+          prev.hasEstoqueComprado = true;
+          prev.estoquecomprado += compradoInfo.value;
+        }
+        if (fisicoInfo.present) {
+          prev.hasEstoqueFisico = true;
+          prev.estoquefisico += fisicoInfo.value;
+        }
         prev.vendido += parseIntSafe(r.vendido) || 0;
         if (preco != null && qty) {
           prev.valorLiquido += preco * qty * fator;
@@ -1645,7 +1669,7 @@
       return { key: "miss", label: "Fora do Mapão", className: "badge-miss" };
     }
 
-    const saldo = stockQty(stock);
+    const saldo = situationQty(stock);
     const inTop150 = ranking != null && ranking >= 1 && ranking <= TOP_SALDO_RANK;
 
     if (saldo <= 0) return { key: "zero", label: "Sem estoque", className: "badge-zero" };
@@ -1662,7 +1686,7 @@
       };
     }
 
-    // Reposição do Top 150 tem prioridade sobre acerto 90+ (estoque total na loja).
+    // Reposição do Top 150: saldo conforme regra (físico > comprado+consignado > consignado).
     if (inTop150) {
       if (saldo <= 3) return { key: "urgent", label: "Repor com<br>urgência", className: "badge-urgent" };
       if (saldo <= 7) return { key: "alert", label: "Alerta<br>reposição", className: "badge-alert" };
@@ -1712,7 +1736,7 @@
         sit: situation(stock, null),
       }))
       .sort((a, b) => {
-        const saldoDiff = stockQty(b.stock) - stockQty(a.stock);
+        const saldoDiff = situationQty(b.stock) - situationQty(a.stock);
         if (saldoDiff !== 0) return saldoDiff;
         return (b.stock.fdias || 0) - (a.stock.fdias || 0);
       });
@@ -1736,9 +1760,10 @@
         return row.stock?.estoquecomprado == null ? Number.NEGATIVE_INFINITY : row.stock.estoquecomprado;
       case "fisico":
         return row.stock?.estoquefisico == null ? Number.NEGATIVE_INFINITY : row.stock.estoquefisico;
-      case "saldo":
       case "total":
         return row.stock == null ? Number.NEGATIVE_INFINITY : stockQty(row.stock);
+      case "saldo":
+        return row.stock == null ? Number.NEGATIVE_INFINITY : situationQty(row.stock);
       case "fdias":
         return row.stock?.fdias == null ? Number.NEGATIVE_INFINITY : row.stock.fdias;
       case "vendido":
@@ -1934,7 +1959,7 @@
     rows.forEach((row) => {
       const stock = row.stock;
       if (row.inRanking && stock) match += 1;
-      if (!stock || stockQty(stock) <= 0) zero += 1;
+      if (!stock || situationQty(stock) <= 0) zero += 1;
       if (stock && (stock.fdias || 0) >= IDLE_DAYS) idle90 += 1;
       if (stock && (stock.fdias || 0) >= IDLE_DAYS_LONG) idle180 += 1;
     });
@@ -1997,7 +2022,7 @@
     top150Items.forEach((item) => {
       top150 += 1;
       const stock = findStockForRankingIn(item, stockLookup, stockByKey);
-      const saldo = stockQty(stock);
+      const saldo = situationQty(stock);
       const unit = unitNetPrice(stock);
 
       if (!stock || saldo <= 0) {
@@ -2604,7 +2629,7 @@
 
     rows.forEach((row) => {
       const stock = row.stock;
-      const saldo = stockQty(stock);
+      const saldo = situationQty(stock);
       const consignado = stock ? (stock.consignado || 0) : 0;
       const inTop150 = row.inRanking && row.ranking != null && row.ranking >= 1 && row.ranking <= TOP_SALDO_RANK;
 
@@ -2619,7 +2644,7 @@
           else if (row.sit?.key === "alert" || saldo <= 7) alert += 1;
         }
 
-        // Meta comercial: cada título do Top 150 com pelo menos 8 exemplares (estoque total).
+        // Meta comercial: cada título do Top 150 com pelo menos 8 exemplares (saldo da situação).
         const gap = Math.max(TARGET_OK_SALDO - saldo, 0);
         if (gap > 0) {
           const unit = unitNetPrice(stock);
