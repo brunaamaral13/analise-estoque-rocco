@@ -1993,6 +1993,8 @@
     let sumCoverage = 0;
     let sumPotencial = 0;
     let sumValorParado = 0;
+    let sumVolumeIdle90 = 0;
+    let sumValorIdle90 = 0;
 
     // Agrupa o Mapão por cliente uma única vez (evita varrer todas as linhas por cliente).
     const rowsByClient = new Map();
@@ -2034,12 +2036,20 @@
       // Totais do Mapão inteiro do cliente (não só Top 150).
       let isbnsConsignados = 0;
       let volumeConsignado = 0;
+      let volumeIdle90 = 0;
+      let valorIdle90 = 0;
       built.byKey.forEach((stock) => {
         const qty = stock.consignado || 0;
         if (qty <= 0) return;
         isbnsConsignados += 1;
         volumeConsignado += qty;
+        if ((stock.fdias || 0) >= IDLE_DAYS) {
+          volumeIdle90 += qty;
+          valorIdle90 += stock.valorLiquido || 0;
+        }
       });
+      sumVolumeIdle90 += volumeIdle90;
+      sumValorIdle90 += valorIdle90;
 
       clientRows.push({
         codigo: client.codigo,
@@ -2050,6 +2060,8 @@
         pctRupture: metrics.pctRupture,
         rupture: metrics.rupture,
         valorParado: metrics.valorParado,
+        volumeIdle90,
+        valorIdle90,
         potencial: metrics.potencial,
         isbnsConsignados,
         volumeConsignado,
@@ -2101,6 +2113,8 @@
       highRuptureCodes,
       potencial: sumPotencial,
       valorParado: sumValorParado,
+      volumeIdle90: sumVolumeIdle90,
+      valorIdle90: sumValorIdle90,
       chronicTitleCount: chronicAll.length,
       clientRows,
       roteiro,
@@ -2379,6 +2393,14 @@
           tone: "is-amber",
           filter: { type: "highRupture" },
         },
+        {
+          key: "idle90",
+          label: "Sem giro há 90+ dias",
+          value: money(overview.valorIdle90 || 0),
+          meta: `${(overview.volumeIdle90 || 0).toLocaleString("pt-BR")} un. paradas na carteira`,
+          tone: "is-slate",
+          valueClass: "is-money",
+        },
       ];
 
       els.portfolioKpis.innerHTML = kpis.map((kpi) => {
@@ -2390,10 +2412,11 @@
         const attrs = kpi.filter
           ? `type="button" data-portfolio-filter-type="${escapeHtml(kpi.filter.type)}" class="portfolio-kpi is-clickable ${kpi.tone || ""}${active ? " is-active" : ""}"`
           : `class="portfolio-kpi ${kpi.tone || ""}"`;
+        const valueClass = kpi.valueClass ? ` portfolio-kpi-value ${kpi.valueClass}` : "portfolio-kpi-value";
         return `
           <${tag} ${attrs}>
             <span class="portfolio-kpi-label">${escapeHtml(kpi.label)}</span>
-            <strong class="portfolio-kpi-value">${escapeHtml(kpi.value)}</strong>
+            <strong class="${valueClass}">${escapeHtml(kpi.value)}</strong>
             <span class="portfolio-kpi-meta">${escapeHtml(kpi.meta)}</span>
           </${tag}>
         `;
