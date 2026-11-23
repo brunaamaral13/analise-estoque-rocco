@@ -112,7 +112,6 @@
     portfolioDetails: document.getElementById("portfolioDetails"),
     portfolioBands: document.getElementById("portfolioBands"),
     portfolioRoteiro: document.getElementById("portfolioRoteiro"),
-    portfolioWorst: document.getElementById("portfolioWorst"),
     portfolioRupture: document.getElementById("portfolioRupture"),
     portfolioIdle: document.getElementById("portfolioIdle"),
     portfolioIgnoredPanel: document.getElementById("portfolioIgnoredPanel"),
@@ -2097,8 +2096,6 @@
     const byName = (a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
     // Listas completas: o recorte (e lojas desconsideradas) é aplicado só na renderização
     // do roteiro/prioridades, sem afetar o overview geral.
-    const worstCoverage = [...clientRows]
-      .sort((a, b) => a.pctStock - b.pctStock || b.rupture - a.rupture || byName(a, b));
     const mostRupture = [...clientRows]
       .sort((a, b) => b.rupture - a.rupture || a.pctStock - b.pctStock || byName(a, b));
     const mostIdleValue = [...clientRows]
@@ -2128,7 +2125,6 @@
       chronicTitleCount: chronicAll.length,
       clientRows,
       roteiro,
-      worstCoverage,
       mostRupture,
       mostIdleValue,
       chronicTitles,
@@ -2442,12 +2438,6 @@
     renderPortfolioClientList(
       els.portfolioRoteiro,
       visibleAnalysisRows(overview.roteiro),
-      (c) => `cobertura ${c.pctStock}% do top 150`,
-      { ignorable: true }
-    );
-    renderPortfolioClientList(
-      els.portfolioWorst,
-      visibleAnalysisRows(overview.worstCoverage),
       (c) => `cobertura ${c.pctStock}% do top 150`,
       { ignorable: true }
     );
