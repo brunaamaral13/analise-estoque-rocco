@@ -104,6 +104,7 @@
     grid: document.getElementById("grid"),
     btnExpandGrid: document.getElementById("btnExpandGrid"),
     btnToggleStockCols: document.getElementById("btnToggleStockCols"),
+    gridSitFilters: document.getElementById("gridSitFilters"),
     tbody: document.getElementById("tbody"),
     portfolioOverview: document.getElementById("portfolioOverview"),
     portfolioTitle: document.getElementById("portfolioTitle"),
@@ -2446,6 +2447,7 @@
   function syncGridExpanded() {
     const open = Boolean(state.gridExpanded);
     document.body.classList.toggle("is-grid-expanded", open);
+    if (els.gridSitFilters) els.gridSitFilters.hidden = !open;
     if (els.btnExpandGrid) {
       els.btnExpandGrid.setAttribute("aria-expanded", open ? "true" : "false");
       const label = els.btnExpandGrid.querySelector(".grid-expand-label");
@@ -2812,6 +2814,13 @@
       chip.classList.toggle("is-active", chip.dataset.filter === active);
       chip.setAttribute("aria-pressed", chip.dataset.filter === active ? "true" : "false");
     });
+    if (els.gridSitFilters) {
+      els.gridSitFilters.querySelectorAll("[data-filter]").forEach((btn) => {
+        const on = btn.dataset.filter === active;
+        btn.classList.toggle("is-active", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    }
     if (els.sumRoteiro) {
       els.sumRoteiro.querySelectorAll("[data-filter]").forEach((btn) => {
         btn.classList.toggle("is-active", btn.dataset.filter === active);
@@ -3759,6 +3768,14 @@
     if (!btn) return;
     applyFilter(btn.dataset.filter);
   });
+
+  if (els.gridSitFilters) {
+    els.gridSitFilters.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-filter]");
+      if (!btn) return;
+      applyFilter(btn.dataset.filter);
+    });
+  }
 
   els.actions.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-filter]");
