@@ -1655,7 +1655,7 @@ body.is-grid-expanded .badge {
 .grid td {
   padding: 12px 14px;
   border-bottom: 1px solid var(--line);
-  text-align: left;
+  text-align: center;
   vertical-align: top;
 }
 .grid th {
@@ -1683,15 +1683,20 @@ body.is-grid-expanded .badge {
   padding: 12px 14px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   cursor: pointer;
   white-space: normal;
   line-height: 1.25;
-  text-align: left;
+  text-align: center;
 }
 .grid th.num.sortable button {
-  justify-content: flex-end;
-  text-align: right;
+  justify-content: center;
+  text-align: center;
+}
+.grid th[data-sort="titulo"] button {
+  justify-content: flex-start;
+  text-align: left;
 }
 .grid th.sortable button::after {
   content: "↕";
@@ -1712,7 +1717,7 @@ body.is-grid-expanded .badge {
   color: var(--ink);
 }
 .grid th.num,
-.grid td.num { text-align: right; white-space: nowrap; }
+.grid td.num { text-align: center; white-space: nowrap; }
 .grid tbody tr:hover { background: #faf7f7; }
 .grid th[data-sort="ranking"],
 .grid td:nth-child(1) {
@@ -1721,7 +1726,7 @@ body.is-grid-expanded .badge {
 }
 .grid th[data-sort="ranking"] button {
   white-space: normal;
-  text-align: right;
+  text-align: center;
   line-height: 1.25;
   max-width: 72px;
 }
@@ -1729,6 +1734,7 @@ body.is-grid-expanded .badge {
 .grid td:nth-child(2) {
   width: 220px;
   max-width: 220px;
+  text-align: left;
 }
 .grid .title {
   display: -webkit-box;
