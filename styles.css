@@ -1607,19 +1607,21 @@ body.is-grid-expanded .grid th[data-sort="preco"],
 body.is-grid-expanded .grid td:nth-child(4),
 body.is-grid-expanded .grid th[data-sort="consignado"],
 body.is-grid-expanded .grid td:nth-child(5),
-body.is-grid-expanded .grid th[data-sort="proprio"],
+body.is-grid-expanded .grid th[data-sort="comprado"],
 body.is-grid-expanded .grid td:nth-child(6),
 body.is-grid-expanded .grid th[data-sort="total"],
 body.is-grid-expanded .grid td:nth-child(7),
-body.is-grid-expanded .grid th[data-sort="fdias"],
+body.is-grid-expanded .grid th[data-sort="fisico"],
 body.is-grid-expanded .grid td:nth-child(8),
+body.is-grid-expanded .grid th[data-sort="fdias"],
+body.is-grid-expanded .grid td:nth-child(9),
 body.is-grid-expanded .grid th[data-sort="vendido"],
-body.is-grid-expanded .grid td:nth-child(9) {
-  width: 7.5%;
+body.is-grid-expanded .grid td:nth-child(10) {
+  width: 7%;
 }
 body.is-grid-expanded .grid th[data-sort="situacao"],
-body.is-grid-expanded .grid td:nth-child(10) {
-  width: 11%;
+body.is-grid-expanded .grid td:nth-child(11) {
+  width: 10%;
   max-width: none;
 }
 body.is-grid-expanded .grid th[data-sort="ranking"] button,
@@ -1734,7 +1736,7 @@ body.is-grid-expanded .badge {
 }
 
 .grid th[data-sort="situacao"],
-.grid td:nth-child(10) {
+.grid td:nth-child(11) {
   width: 118px;
   max-width: 118px;
 }

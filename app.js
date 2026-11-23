@@ -551,29 +551,43 @@
       .replace(/[\u0300-\u036f]/g, "");
   }
 
-  /** Lê estoque físico/próprio/comprado do Mapão (coluna opcional). */
-  function ownStockFromRow(row) {
+  function stockFieldFromRow(row, aliases) {
     if (!row || typeof row !== "object") return 0;
-    const aliases = new Set([
-      "estoquefisico",
-      "estoqueproprio",
-      "estoquecomprado",
-      "estoquetotalproprio",
-      "comprado",
-      "proprio",
-      "fisico",
-    ].map(normalizeHeaderKey));
+    const want = new Set(aliases.map(normalizeHeaderKey));
     for (const [key, raw] of Object.entries(row)) {
-      if (!aliases.has(normalizeHeaderKey(key))) continue;
+      if (!want.has(normalizeHeaderKey(key))) continue;
       return parseIntSafe(raw) || 0;
     }
     return 0;
   }
 
-  /** Saldo total na loja: consignado + estoque físico. */
+  /** Estoque comprado do Mapão (soma no total com consignado). */
+  function purchasedStockFromRow(row) {
+    return stockFieldFromRow(row, [
+      "estoquecomprado",
+      "estoque_comprado",
+      "estoque proprio",
+      "estoqueproprio",
+      "estoquetotalproprio",
+      "comprado",
+      "proprio",
+    ]);
+  }
+
+  /** Estoque físico (pronta entrega do cliente; não entra no total). */
+  function physicalStockFromRow(row) {
+    return stockFieldFromRow(row, [
+      "estoquefisico",
+      "estoque_fisico",
+      "estoque fisico",
+      "fisico",
+    ]);
+  }
+
+  /** Saldo total para cobertura: consignado + estoque comprado. */
   function stockQty(stock) {
     if (!stock) return 0;
-    return (stock.consignado || 0) + (stock.estoqueproprio || 0);
+    return (stock.consignado || 0) + (stock.estoquecomprado || 0);
   }
 
   function matrixToObjects(matrix) {
@@ -882,7 +896,8 @@
           precoLiquido: null,
           fator: 1,
           consignado: 0,
-          estoqueproprio: 0,
+          estoquecomprado: 0,
+          estoquefisico: 0,
           valorLiquido: 0,
           fdias: null,
           vendido: 0,
@@ -890,13 +905,15 @@
         };
 
         const qty = parseIntSafe(r.consignado) || 0;
-        const proprio = ownStockFromRow(r);
+        const comprado = purchasedStockFromRow(r);
+        const fisico = physicalStockFromRow(r);
         const preco = coverPriceForRow(r);
         const desconto = parseNumber(r.perdesconto) || 0;
         const fator = Math.max(0, 1 - desconto / 100);
 
         prev.consignado += qty;
-        prev.estoqueproprio += proprio;
+        prev.estoquecomprado += comprado;
+        prev.estoquefisico += fisico;
         prev.vendido += parseIntSafe(r.vendido) || 0;
         if (preco != null && qty) {
           prev.valorLiquido += preco * qty * fator;
@@ -1713,8 +1730,10 @@
         return row.stock?.preco == null ? Number.NEGATIVE_INFINITY : row.stock.preco;
       case "consignado":
         return row.stock?.consignado == null ? Number.NEGATIVE_INFINITY : row.stock.consignado;
-      case "proprio":
-        return row.stock?.estoqueproprio == null ? Number.NEGATIVE_INFINITY : row.stock.estoqueproprio;
+      case "comprado":
+        return row.stock?.estoquecomprado == null ? Number.NEGATIVE_INFINITY : row.stock.estoquecomprado;
+      case "fisico":
+        return row.stock?.estoquefisico == null ? Number.NEGATIVE_INFINITY : row.stock.estoquefisico;
       case "saldo":
       case "total":
         return row.stock == null ? Number.NEGATIVE_INFINITY : stockQty(row.stock);
@@ -2962,8 +2981,9 @@
     updateSummary(rows);
     els.tbody.innerHTML = rows.map((row) => {
       const consignado = row.stock ? (row.stock.consignado || 0) : null;
-      const proprio = row.stock ? (row.stock.estoqueproprio || 0) : null;
+      const comprado = row.stock ? (row.stock.estoquecomprado || 0) : null;
       const total = row.stock ? stockQty(row.stock) : null;
+      const fisico = row.stock ? (row.stock.estoquefisico || 0) : null;
       const fdias = row.stock ? row.stock.fdias : null;
       const vendido = row.stock ? row.stock.vendido : null;
       const preco = row.stock?.preco;
@@ -2987,8 +3007,9 @@
           <td><span class="isbn">${escapeHtml(row.isbn)}</span></td>
           <td class="num">${money(preco)}</td>
           <td class="num">${consignado == null ? "—" : consignado.toLocaleString("pt-BR")}</td>
-          <td class="num">${proprio == null ? "—" : proprio.toLocaleString("pt-BR")}</td>
+          <td class="num">${comprado == null ? "—" : comprado.toLocaleString("pt-BR")}</td>
           <td class="num ${total === 0 ? "saldo-zero" : ""}">${total == null ? "—" : total.toLocaleString("pt-BR")}</td>
+          <td class="num">${fisico == null ? "—" : fisico.toLocaleString("pt-BR")}</td>
           <td class="num fdias">${fdias == null ? "—" : fdias.toLocaleString("pt-BR")}</td>
           <td class="num">${vendido == null ? "—" : vendido.toLocaleString("pt-BR")}</td>
           <td><span class="badge ${row.sit.className}">${row.sit.label}</span></td>
