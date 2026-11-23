@@ -1,6 +1,7 @@
 (() => {
   const RANK_FILE = "Mais vendidos Rocco.csv";
   const COVER_PRICE_FILE = "precos-capa.csv";
+  const PROMO_FILE = "promocoes-vigente.csv";
   const IDLE_DAYS = 90;
   const IDLE_DAYS_LONG = 180;
   const TOP_SALDO_RANK = 150;
@@ -153,6 +154,7 @@
     sellerPick: null,
     ranking: [],
     coverPrices: new Map(),
+    promoByIsbn: new Map(),
     mapaRows: [],
     stockByKey: new Map(),
     stockLookup: new Map(),
@@ -953,6 +955,42 @@
       if (alias && state.coverPrices.has(alias)) return state.coverPrices.get(alias);
     }
     return fallback;
+  }
+
+  async function loadPromos() {
+    try {
+      const res = await fetch(encodeURI(PROMO_FILE));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buffer = await res.arrayBuffer();
+      const text = decodeCsvBuffer(buffer);
+      const rows = parseCsv(text);
+      const map = new Map();
+      rows.forEach((r) => {
+        const pct = parseIntSafe(r.desconto ?? r.promo ?? r.percentual);
+        if (pct == null || pct <= 0) return;
+        isbnAliases(r.isbn).forEach((alias) => {
+          if (alias) map.set(alias, pct);
+        });
+      });
+      state.promoByIsbn = map;
+      if (state.clients.length) render();
+    } catch (err) {
+      console.error(err);
+      state.promoByIsbn = new Map();
+    }
+  }
+
+  /** Desconto % da promoção vigente (lista fixa), se o ISBN estiver nela. */
+  function promoPctForRow(row) {
+    const aliases = [
+      ...isbnAliases(row?.isbn),
+      ...isbnAliases(row?.stock?.isbn),
+      ...isbnAliases(row?.codbarra),
+    ];
+    for (const alias of aliases) {
+      if (alias && state.promoByIsbn.has(alias)) return state.promoByIsbn.get(alias);
+    }
+    return null;
   }
 
   function buildClientStock(rows, clientCode) {
@@ -3184,6 +3222,10 @@
       const fdias = row.stock ? row.stock.fdias : null;
       const vendido = row.stock ? row.stock.vendido : null;
       const preco = row.stock?.preco;
+      const promoPct = promoPctForRow(row);
+      const priceCell = promoPct != null
+        ? `<span class="price-cell"><span class="price-value">${money(preco)}</span><span class="promo-tag">promo ${promoPct}%</span></span>`
+        : money(preco);
       const rowClass = [
         row.sit.key === "zero" || row.sit.key === "urgent" || row.sit.key === "rupture" ? "row-zero" : "",
         row.sit.key === "alert" ? "row-alert" : "",
@@ -3202,7 +3244,7 @@
             <span class="author" title="${escapeHtml(row.autor || "")}">${escapeHtml(row.autor || (row.inRanking ? "—" : "Somente no Mapão"))}</span>
           </td>
           <td><span class="isbn">${escapeHtml(row.isbn)}</span></td>
-          <td class="num">${money(preco)}</td>
+          <td class="num">${priceCell}</td>
           <td class="num">${consignado == null ? "—" : consignado.toLocaleString("pt-BR")}</td>
           <td class="num col-comprado">${comprado == null ? "—" : comprado.toLocaleString("pt-BR")}</td>
           <td class="num col-total ${total === 0 ? "saldo-zero" : ""}">${total == null ? "—" : total.toLocaleString("pt-BR")}</td>
@@ -3960,4 +4002,5 @@
   initSellerGate();
   loadRanking();
   loadCoverPrices();
+  loadPromos();
 })();

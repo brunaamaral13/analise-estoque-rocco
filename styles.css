@@ -1956,6 +1956,25 @@ body.is-grid-expanded .badge {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.price-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  line-height: 1.15;
+}
+.price-value {
+  display: block;
+}
+.promo-tag {
+  display: block;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--green);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
 .grid .isbn {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
