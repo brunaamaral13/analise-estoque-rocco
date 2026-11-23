@@ -5,6 +5,23 @@
   const IDLE_DAYS_LONG = 180;
   const TOP_SALDO_RANK = 150;
   const TARGET_OK_SALDO = 8;
+  const COVERAGE_MODE_KEY = "rocco-coverage-mode";
+  const COVERAGE_MODES = {
+    livraria: {
+      key: "livraria",
+      label: "Livraria",
+      urgentMax: 3,
+      alertMax: 7,
+      targetOk: TARGET_OK_SALDO,
+    },
+    distribuidor: {
+      key: "distribuidor",
+      label: "Distribuidor",
+      urgentMax: 15,
+      alertMax: 29,
+      targetOk: 30,
+    },
+  };
   const HIGH_RUPTURE_PCT = 40;
   const CHRONIC_STORE_PCT = 30;
   const PORTFOLIO_LIST_LIMIT = 5;
@@ -108,6 +125,8 @@
     btnHideSidebar: document.getElementById("btnHideSidebar"),
     btnShowSidebar: document.getElementById("btnShowSidebar"),
     sidebar: document.getElementById("sidebar"),
+    btnModeLivraria: document.getElementById("btnModeLivraria"),
+    btnModeDistribuidor: document.getElementById("btnModeDistribuidor"),
     tbody: document.getElementById("tbody"),
     portfolioOverview: document.getElementById("portfolioOverview"),
     portfolioTitle: document.getElementById("portfolioTitle"),
@@ -159,6 +178,7 @@
     gridExpanded: false,
     consignadoOnlyCols: false,
     sidebarCollapsed: loadSidebarCollapsed(),
+    coverageMode: loadCoverageMode(),
     portfolioClientFilter: null,
     ignoredAnalysisClients: loadIgnoredSet(IGNORED_ANALYSIS_STORAGE_KEY),
     ignoredChronicTitles: loadIgnoredSet(IGNORED_CHRONIC_STORAGE_KEY),
@@ -180,6 +200,27 @@
     } catch (err) {
       /* ignore */
     }
+  }
+
+  function loadCoverageMode() {
+    try {
+      const raw = localStorage.getItem(COVERAGE_MODE_KEY);
+      return COVERAGE_MODES[raw] ? raw : "livraria";
+    } catch (err) {
+      return "livraria";
+    }
+  }
+
+  function persistCoverageMode(mode) {
+    try {
+      localStorage.setItem(COVERAGE_MODE_KEY, mode);
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
+  function coverageThresholds() {
+    return COVERAGE_MODES[state.coverageMode] || COVERAGE_MODES.livraria;
   }
 
   function loadIgnoredSet(storageKey) {
@@ -1723,10 +1764,11 @@
       };
     }
 
-    // Reposição do Top 150: saldo conforme regra (físico > comprado+consignado > consignado).
+    // Reposição do Top 150: limiares conforme Livraria ou Distribuidor.
     if (inTop150) {
-      if (saldo <= 3) return { key: "urgent", label: "Repor com<br>urgência", className: "badge-urgent" };
-      if (saldo <= 7) return { key: "alert", label: "Alerta<br>reposição", className: "badge-alert" };
+      const { urgentMax, alertMax } = coverageThresholds();
+      if (saldo <= urgentMax) return { key: "urgent", label: "Repor com<br>urgência", className: "badge-urgent" };
+      if (saldo <= alertMax) return { key: "alert", label: "Alerta<br>reposição", className: "badge-alert" };
     }
 
     if (consignado > 0 && fdias >= IDLE_DAYS) {
@@ -2055,6 +2097,8 @@
     let potencial = 0;
     const rupturedItems = [];
 
+    const { urgentMax, alertMax, targetOk } = coverageThresholds();
+
     top150Items.forEach((item) => {
       top150 += 1;
       const stock = findStockForRankingIn(item, stockLookup, stockByKey);
@@ -2065,17 +2109,17 @@
         rupture += 1;
         urgent += 1;
         rupturedItems.push(item);
-        if (unit != null) potencial += TARGET_OK_SALDO * unit;
+        if (unit != null) potencial += targetOk * unit;
         return;
       }
 
       withStock += 1;
-      if (saldo <= 3) {
+      if (saldo <= urgentMax) {
         urgent += 1;
-        if (unit != null) potencial += Math.max(TARGET_OK_SALDO - saldo, 0) * unit;
-      } else if (saldo <= 7) {
+        if (unit != null) potencial += Math.max(targetOk - saldo, 0) * unit;
+      } else if (saldo <= alertMax) {
         alert += 1;
-        if (unit != null) potencial += Math.max(TARGET_OK_SALDO - saldo, 0) * unit;
+        if (unit != null) potencial += Math.max(targetOk - saldo, 0) * unit;
       }
     });
 
@@ -2466,6 +2510,25 @@
     syncPortfolioDetailsOpen();
   }
 
+  function syncCoverageMode() {
+    const mode = coverageThresholds().key;
+    [els.btnModeLivraria, els.btnModeDistribuidor].forEach((btn) => {
+      if (!btn) return;
+      const on = btn.dataset.coverageMode === mode;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+
+  function setCoverageMode(mode) {
+    if (!COVERAGE_MODES[mode] || state.coverageMode === mode) return;
+    state.coverageMode = mode;
+    persistCoverageMode(mode);
+    invalidatePortfolioOverview();
+    syncCoverageMode();
+    render();
+  }
+
   function syncSidebarCollapsed() {
     const collapsed = Boolean(state.sidebarCollapsed);
     document.body.classList.toggle("is-sidebar-collapsed", collapsed);
@@ -2686,6 +2749,8 @@
     let potencialUnidades = 0;
     let potencialTitulos = 0;
 
+    const { urgentMax, alertMax, targetOk } = coverageThresholds();
+
     rows.forEach((row) => {
       const stock = row.stock;
       const saldo = situationQty(stock);
@@ -2699,12 +2764,12 @@
           urgent += 1;
         } else {
           withStock += 1;
-          if (row.sit?.key === "urgent" || saldo <= 3) urgent += 1;
-          else if (row.sit?.key === "alert" || saldo <= 7) alert += 1;
+          if (row.sit?.key === "urgent" || saldo <= urgentMax) urgent += 1;
+          else if (row.sit?.key === "alert" || saldo <= alertMax) alert += 1;
         }
 
-        // Meta comercial: cada título do Top 150 com pelo menos 8 exemplares (saldo da situação).
-        const gap = Math.max(TARGET_OK_SALDO - saldo, 0);
+        // Meta comercial: Top 150 no alvo do modo (livraria 8 / distribuidor 30).
+        const gap = Math.max(targetOk - saldo, 0);
         if (gap > 0) {
           const unit = unitNetPrice(stock);
           if (unit != null) {
@@ -2754,9 +2819,10 @@
     els.sumIdleMeta.textContent = `${idle180Count.toLocaleString("pt-BR")} ISBN(s) parados há 180+ dias`;
     if (els.sumRestockValue) els.sumRestockValue.textContent = money(potencial);
     if (els.sumRestockMeta) {
+      const { targetOk } = coverageThresholds();
       els.sumRestockMeta.textContent = potencialTitulos
-        ? `${potencialUnidades.toLocaleString("pt-BR")} un. em ${potencialTitulos.toLocaleString("pt-BR")} título(s) do Top ${TOP_SALDO_RANK} abaixo de ${TARGET_OK_SALDO} un.`
-        : `Nenhum título do Top ${TOP_SALDO_RANK} abaixo de ${TARGET_OK_SALDO} un.`;
+        ? `${potencialUnidades.toLocaleString("pt-BR")} un. em ${potencialTitulos.toLocaleString("pt-BR")} título(s) do Top ${TOP_SALDO_RANK} abaixo de ${targetOk} un.`
+        : `Nenhum título do Top ${TOP_SALDO_RANK} abaixo de ${targetOk} un.`;
     }
   }
 
@@ -3241,6 +3307,12 @@
     els.btnShowSidebar.addEventListener("click", () => setSidebarCollapsed(false));
   }
   syncSidebarCollapsed();
+  syncCoverageMode();
+
+  [els.btnModeLivraria, els.btnModeDistribuidor].forEach((btn) => {
+    if (!btn) return;
+    btn.addEventListener("click", () => setCoverageMode(btn.dataset.coverageMode));
+  });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && state.gridExpanded) {

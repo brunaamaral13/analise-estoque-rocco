@@ -486,7 +486,7 @@ body.is-sidebar-collapsed .main {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 10px 18px;
 }
 .isbn-toggle {
   border: 0;
@@ -500,6 +500,49 @@ body.is-sidebar-collapsed .main {
 }
 .isbn-toggle:hover {
   color: var(--red-deep);
+}
+.coverage-mode {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.coverage-mode-label {
+  font-size: 12px;
+  font-weight: 560;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.coverage-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f7f8fc;
+  gap: 2px;
+}
+.coverage-mode-btn {
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1.2;
+}
+.coverage-mode-btn:hover {
+  color: var(--ink);
+}
+.coverage-mode-btn.is-active {
+  background: var(--red);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(181, 25, 26, 0.22);
 }
 .isbn-search-panel {
   display: flex;
