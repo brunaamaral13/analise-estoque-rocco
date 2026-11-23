@@ -1255,8 +1255,10 @@ h1, h2, p { margin: 0; }
   color: var(--kpi-fg);
 }
 .portfolio-kpi-value.is-money {
-  font-size: clamp(1.15rem, 1.8vw, 1.45rem);
-  letter-spacing: -.01em;
+  font-size: clamp(0.95rem, 1.25vw, 1.15rem);
+  letter-spacing: -.02em;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
 }
 .portfolio-kpi-meta {
   font-size: 11px;
