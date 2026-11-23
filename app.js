@@ -105,6 +105,9 @@
     btnExpandGrid: document.getElementById("btnExpandGrid"),
     btnToggleStockCols: document.getElementById("btnToggleStockCols"),
     gridSitFilters: document.getElementById("gridSitFilters"),
+    btnHideSidebar: document.getElementById("btnHideSidebar"),
+    btnShowSidebar: document.getElementById("btnShowSidebar"),
+    sidebar: document.getElementById("sidebar"),
     tbody: document.getElementById("tbody"),
     portfolioOverview: document.getElementById("portfolioOverview"),
     portfolioTitle: document.getElementById("portfolioTitle"),
@@ -155,10 +158,29 @@
     portfolioDetailsOpen: false,
     gridExpanded: false,
     consignadoOnlyCols: false,
+    sidebarCollapsed: loadSidebarCollapsed(),
     portfolioClientFilter: null,
     ignoredAnalysisClients: loadIgnoredSet(IGNORED_ANALYSIS_STORAGE_KEY),
     ignoredChronicTitles: loadIgnoredSet(IGNORED_CHRONIC_STORAGE_KEY),
   };
+
+  const SIDEBAR_COLLAPSED_KEY = "rocco-sidebar-collapsed";
+
+  function loadSidebarCollapsed() {
+    try {
+      return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function persistSidebarCollapsed(collapsed) {
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+    } catch (err) {
+      /* ignore */
+    }
+  }
 
   function loadIgnoredSet(storageKey) {
     try {
@@ -2444,6 +2466,28 @@
     syncPortfolioDetailsOpen();
   }
 
+  function syncSidebarCollapsed() {
+    const collapsed = Boolean(state.sidebarCollapsed);
+    document.body.classList.toggle("is-sidebar-collapsed", collapsed);
+    if (els.btnShowSidebar) els.btnShowSidebar.hidden = !collapsed;
+    if (els.btnHideSidebar) {
+      els.btnHideSidebar.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    }
+    if (els.sidebar) {
+      els.sidebar.setAttribute("aria-hidden", collapsed ? "true" : "false");
+    }
+  }
+
+  function setSidebarCollapsed(collapsed) {
+    state.sidebarCollapsed = Boolean(collapsed);
+    persistSidebarCollapsed(state.sidebarCollapsed);
+    syncSidebarCollapsed();
+  }
+
+  function toggleSidebarCollapsed() {
+    setSidebarCollapsed(!state.sidebarCollapsed);
+  }
+
   function syncGridExpanded() {
     const open = Boolean(state.gridExpanded);
     document.body.classList.toggle("is-grid-expanded", open);
@@ -3189,6 +3233,14 @@
   if (els.btnToggleStockCols) {
     els.btnToggleStockCols.addEventListener("click", () => toggleConsignadoOnlyCols());
   }
+
+  if (els.btnHideSidebar) {
+    els.btnHideSidebar.addEventListener("click", () => setSidebarCollapsed(true));
+  }
+  if (els.btnShowSidebar) {
+    els.btnShowSidebar.addEventListener("click", () => setSidebarCollapsed(false));
+  }
+  syncSidebarCollapsed();
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && state.gridExpanded) {
