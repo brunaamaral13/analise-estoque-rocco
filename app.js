@@ -317,6 +317,9 @@
 
     let cleaned = String(value).trim().replace(/\s/g, "");
     if (!cleaned) return null;
+    // Moeda / símbolos (ex.: R$139.90).
+    cleaned = cleaned.replace(/^R\$/i, "").replace(/%$/g, "");
+    if (!cleaned) return null;
 
     // Notação científica (ex.: 9.49E+1).
     if (/^[+-]?\d+(?:[.,]\d+)?[eE][+-]?\d+$/.test(cleaned)) {
@@ -562,6 +565,17 @@
       return { value: parseIntSafe(raw) || 0, present: true };
     }
     return { value: 0, present: false };
+  }
+
+  /** Quantidade consignada (aceita "consignado" ou "saldo consignado"). */
+  function consignedQtyFromRow(row) {
+    return stockFieldFromRow(row, [
+      "consignado",
+      "saldoconsignado",
+      "saldo consignado",
+      "qtdconsignado",
+      "quantidadeconsignada",
+    ]).value;
   }
 
   /** Estoque comprado do Mapão (soma no total com consignado). */
@@ -924,7 +938,7 @@
           matchedRanking: false,
         };
 
-        const qty = parseIntSafe(r.consignado) || 0;
+        const qty = consignedQtyFromRow(r);
         const compradoInfo = purchasedStockFromRow(r);
         const fisicoInfo = physicalStockFromRow(r);
         const preco = coverPriceForRow(r);
@@ -1074,7 +1088,7 @@
       const code = String(r.codigo || "").trim();
       if (!code) return;
 
-      const qty = parseIntSafe(r.consignado) || 0;
+      const qty = consignedQtyFromRow(r);
       const preco = coverPriceForRow(r);
       const desconto = parseNumber(r.perdesconto) || 0;
       const fator = Math.max(0, 1 - desconto / 100);
@@ -1162,7 +1176,7 @@
 
     state.mapaRows.forEach((r) => {
       if (!rowMatchesSellerFilter(r)) return;
-      const qty = parseIntSafe(r.consignado) || 0;
+      const qty = consignedQtyFromRow(r);
       if (qty <= 0) return;
 
       const isbn = reliableRowIsbn(r);
@@ -1309,7 +1323,7 @@
       const code = String(r.codigo || "").trim();
       if (!code) return;
 
-      const qty = parseIntSafe(r.consignado) || 0;
+      const qty = consignedQtyFromRow(r);
       const preco = coverPriceForRow(r);
       const desconto = parseNumber(r.perdesconto) || 0;
       const fator = Math.max(0, 1 - desconto / 100);
@@ -3429,7 +3443,7 @@
 
     state.mapaRows.forEach((r) => {
       if (!rowMatchesSellerFilter(r)) return;
-      const qty = parseIntSafe(r.consignado) || 0;
+      const qty = consignedQtyFromRow(r);
       if (qty <= 0) return;
 
       const matchIsbn = rowMatchesIsbn(r, aliasSet, qDigits);
