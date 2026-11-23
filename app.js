@@ -1700,7 +1700,6 @@
       };
     }
 
-    if (inTop150) return { key: "ok", label: "Com saldo", className: "badge-ok" };
     return { key: "ok", label: "Com estoque", className: "badge-ok" };
   }
 
