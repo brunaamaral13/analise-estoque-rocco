@@ -1993,6 +1993,8 @@
     let sumCoverage = 0;
     let sumPotencial = 0;
     let sumValorParado = 0;
+    let sumVolumeConsignado = 0;
+    let sumValorConsignado = 0;
     let sumVolumeIdle90 = 0;
     let sumValorIdle90 = 0;
 
@@ -2036,18 +2038,23 @@
       // Totais do Mapão inteiro do cliente (não só Top 150).
       let isbnsConsignados = 0;
       let volumeConsignado = 0;
+      let valorConsignado = 0;
       let volumeIdle90 = 0;
       let valorIdle90 = 0;
       built.byKey.forEach((stock) => {
         const qty = stock.consignado || 0;
         if (qty <= 0) return;
+        const valor = stock.valorLiquido || 0;
         isbnsConsignados += 1;
         volumeConsignado += qty;
+        valorConsignado += valor;
         if ((stock.fdias || 0) >= IDLE_DAYS) {
           volumeIdle90 += qty;
-          valorIdle90 += stock.valorLiquido || 0;
+          valorIdle90 += valor;
         }
       });
+      sumVolumeConsignado += volumeConsignado;
+      sumValorConsignado += valorConsignado;
       sumVolumeIdle90 += volumeIdle90;
       sumValorIdle90 += valorIdle90;
 
@@ -2065,6 +2072,7 @@
         potencial: metrics.potencial,
         isbnsConsignados,
         volumeConsignado,
+        valorConsignado,
         score: (100 - metrics.pctStock) + metrics.pctRupture,
       });
     });
@@ -2113,6 +2121,8 @@
       highRuptureCodes,
       potencial: sumPotencial,
       valorParado: sumValorParado,
+      volumeConsignado: sumVolumeConsignado,
+      valorConsignado: sumValorConsignado,
       volumeIdle90: sumVolumeIdle90,
       valorIdle90: sumValorIdle90,
       chronicTitleCount: chronicAll.length,
@@ -2363,35 +2373,19 @@
           tone: "is-navy",
         },
         {
-          key: "avg",
-          label: "Cobertura média do Top 150",
-          value: `${overview.avgCoverage}%`,
-          meta: "Em média, quanto do Top 150 as lojas têm em estoque",
+          key: "volume",
+          label: "Volume total consignado",
+          value: (overview.volumeConsignado || 0).toLocaleString("pt-BR"),
+          meta: "Unidades com saldo na carteira",
           tone: "is-teal",
         },
         {
-          key: "below50",
-          label: "Cobertura abaixo de 50%",
-          value: overview.below50Count.toLocaleString("pt-BR"),
-          meta: "Lojas com menos da metade do Top 150 em estoque",
-          tone: "is-maroon",
-          filter: { type: "below50" },
-        },
-        {
-          key: "ge90",
-          label: "Cobertura a partir de 90%",
-          value: overview.ge90Count.toLocaleString("pt-BR"),
-          meta: "Lojas com quase todo o Top 150 em estoque",
+          key: "valor",
+          label: "Valor total consignado",
+          value: money(overview.valorConsignado || 0),
+          meta: "Valor líquido do estoque na carteira",
           tone: "is-green",
-          filter: { type: "ge90" },
-        },
-        {
-          key: "highRupture",
-          label: "Alta ruptura",
-          value: overview.highRuptureCount.toLocaleString("pt-BR"),
-          meta: `Lojas com pelo menos ${HIGH_RUPTURE_PCT}% do Top 150 sem saldo`,
-          tone: "is-amber",
-          filter: { type: "highRupture" },
+          valueClass: "is-money",
         },
         {
           key: "idle90",
@@ -2400,6 +2394,13 @@
           meta: `${(overview.volumeIdle90 || 0).toLocaleString("pt-BR")} un. paradas na carteira`,
           tone: "is-slate",
           valueClass: "is-money",
+        },
+        {
+          key: "avg",
+          label: "Cobertura Top 150",
+          value: `${overview.avgCoverage}%`,
+          meta: "Média do Top 150 em estoque nas lojas",
+          tone: "is-amber",
         },
       ];
 
