@@ -918,6 +918,9 @@ body.is-sidebar-collapsed .main {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .summary-card {
+  --kpi-fg: var(--ink);
+  --kpi-muted: var(--muted);
+  --kpi-ico: var(--red);
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -927,6 +930,30 @@ body.is-sidebar-collapsed .main {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  color: var(--kpi-fg);
+}
+.summary-card.is-navy,
+.summary-card.is-teal,
+.summary-card.is-green,
+.summary-card.is-slate,
+.summary-card.is-maroon {
+  --kpi-fg: #fff;
+  --kpi-muted: rgba(255, 255, 255, 0.78);
+  --kpi-ico: rgba(255, 255, 255, 0.92);
+  border-color: transparent;
+  box-shadow: 0 10px 24px rgba(28, 34, 48, 0.08);
+}
+.summary-card.is-navy { background: #1d2d50; }
+.summary-card.is-teal { background: #137a95; }
+.summary-card.is-green { background: #147a57; }
+.summary-card.is-slate { background: #3f4f63; }
+.summary-card.is-maroon { background: #93333e; }
+.summary-card.is-amber {
+  background: #eab333;
+  --kpi-fg: #1c2230;
+  --kpi-muted: rgba(28, 34, 48, 0.72);
+  --kpi-ico: rgba(28, 34, 48, 0.78);
+  border-color: transparent;
 }
 .summary-card-wide {
   grid-column: 1 / -1;
@@ -941,7 +968,7 @@ body.is-sidebar-collapsed .main {
   font-size: 12px;
   letter-spacing: .04em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--kpi-muted);
   font-weight: 560;
 }
 .card-label {
@@ -961,7 +988,7 @@ body.is-sidebar-collapsed .main {
   stroke-linejoin: round;
 }
 .summary-card .kpi-ico {
-  color: var(--red);
+  color: var(--kpi-ico);
   width: 16px;
   height: 16px;
 }
@@ -970,11 +997,17 @@ body.is-sidebar-collapsed .main {
   font-size: clamp(1.35rem, 2vw, 1.75rem);
   font-weight: 650;
   letter-spacing: -.02em;
-  color: var(--ink);
+  color: var(--kpi-fg);
+  line-height: 1.1;
+}
+.summary-card strong.is-money {
+  font-size: clamp(0.95rem, 1.25vw, 1.2rem);
+  overflow-wrap: anywhere;
+  line-height: 1.15;
 }
 .summary-card small {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--kpi-muted);
 }
 .roteiro-line {
   margin: 2px 0 0;
