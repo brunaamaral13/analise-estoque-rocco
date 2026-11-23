@@ -100,7 +100,9 @@
     emptyState: document.getElementById("emptyState"),
     emptyTitle: document.getElementById("emptyTitle"),
     emptyText: document.getElementById("emptyText"),
+    gridPanel: document.getElementById("gridPanel"),
     grid: document.getElementById("grid"),
+    btnExpandGrid: document.getElementById("btnExpandGrid"),
     tbody: document.getElementById("tbody"),
     portfolioOverview: document.getElementById("portfolioOverview"),
     portfolioTitle: document.getElementById("portfolioTitle"),
@@ -149,6 +151,7 @@
     mapaIsbnQuality: null,
     portfolioOverview: null,
     portfolioDetailsOpen: false,
+    gridExpanded: false,
     portfolioClientFilter: null,
     ignoredAnalysisClients: loadIgnoredSet(IGNORED_ANALYSIS_STORAGE_KEY),
     ignoredChronicTitles: loadIgnoredSet(IGNORED_CHRONIC_STORAGE_KEY),
@@ -2368,6 +2371,26 @@
     syncPortfolioDetailsOpen();
   }
 
+  function syncGridExpanded() {
+    const open = Boolean(state.gridExpanded);
+    document.body.classList.toggle("is-grid-expanded", open);
+    if (els.btnExpandGrid) {
+      els.btnExpandGrid.setAttribute("aria-expanded", open ? "true" : "false");
+      const label = els.btnExpandGrid.querySelector(".grid-expand-label");
+      if (label) label.textContent = open ? "Sair da tela cheia" : "Expandir tabela";
+      els.btnExpandGrid.title = open ? "Voltar à visão normal (Esc)" : "Ver todas as colunas em tela cheia";
+    }
+  }
+
+  function setGridExpanded(open) {
+    state.gridExpanded = Boolean(open);
+    syncGridExpanded();
+  }
+
+  function toggleGridExpanded() {
+    setGridExpanded(!state.gridExpanded);
+  }
+
   function renderPortfolioOverview(overviewArg) {
     if (!els.portfolioOverview) return;
     const overview = overviewArg || ensurePortfolioOverview();
@@ -2885,7 +2908,8 @@
 
     if (els.emptyState) els.emptyState.hidden = hasClient || hasIsbnView || Boolean(portfolioData);
     if (els.portfolioOverview) els.portfolioOverview.hidden = !portfolioData;
-    if (els.grid) els.grid.hidden = !hasClient;
+    if (els.gridPanel) els.gridPanel.hidden = !hasClient;
+    if (!hasClient && state.gridExpanded) setGridExpanded(false);
     if (els.summary) els.summary.hidden = !hasClient;
     if (els.actions) els.actions.hidden = !hasClient;
     if (els.filters) els.filters.hidden = !hasClient;
@@ -3053,6 +3077,17 @@
   if (els.btnPortfolioDetails) {
     els.btnPortfolioDetails.addEventListener("click", () => togglePortfolioDetails());
   }
+
+  if (els.btnExpandGrid) {
+    els.btnExpandGrid.addEventListener("click", () => toggleGridExpanded());
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && state.gridExpanded) {
+      e.preventDefault();
+      setGridExpanded(false);
+    }
+  });
 
   if (els.portfolioOverview) {
     els.portfolioOverview.addEventListener("click", (e) => {

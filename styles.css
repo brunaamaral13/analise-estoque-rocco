@@ -1497,10 +1497,137 @@ button.portfolio-ignore-btn.is-restore:hover {
   font-size: 13px;
 }
 
+.grid-panel {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+.grid-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #fafbfe;
+}
+.grid-toolbar-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink);
+}
+.grid-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink);
+  cursor: pointer;
+}
+.grid-expand-btn:hover {
+  border-color: rgba(181, 25, 26, 0.35);
+  color: var(--red-deep);
+}
+.grid-expand-ico {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.grid-scroll {
+  overflow: auto;
+  min-width: 0;
+}
 .grid {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+}
+body.is-grid-expanded {
+  overflow: hidden;
+}
+body.is-grid-expanded .grid-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  box-shadow: none;
+}
+body.is-grid-expanded .grid-toolbar {
+  flex: 0 0 auto;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+body.is-grid-expanded .grid-scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 0 8px 12px;
+}
+body.is-grid-expanded .grid {
+  table-layout: fixed;
+  font-size: 12.5px;
+  width: 100%;
+  min-width: 0;
+}
+body.is-grid-expanded .grid th,
+body.is-grid-expanded .grid td {
+  padding: 8px 8px;
+}
+body.is-grid-expanded .grid th.sortable button {
+  padding: 8px;
+}
+body.is-grid-expanded .grid th[data-sort="ranking"],
+body.is-grid-expanded .grid td:nth-child(1) {
+  width: 5%;
+  max-width: none;
+}
+body.is-grid-expanded .grid th[data-sort="titulo"],
+body.is-grid-expanded .grid td:nth-child(2) {
+  width: 22%;
+  max-width: none;
+}
+body.is-grid-expanded .grid th[data-sort="isbn"],
+body.is-grid-expanded .grid td:nth-child(3) {
+  width: 10%;
+}
+body.is-grid-expanded .grid th[data-sort="preco"],
+body.is-grid-expanded .grid td:nth-child(4),
+body.is-grid-expanded .grid th[data-sort="consignado"],
+body.is-grid-expanded .grid td:nth-child(5),
+body.is-grid-expanded .grid th[data-sort="proprio"],
+body.is-grid-expanded .grid td:nth-child(6),
+body.is-grid-expanded .grid th[data-sort="total"],
+body.is-grid-expanded .grid td:nth-child(7),
+body.is-grid-expanded .grid th[data-sort="fdias"],
+body.is-grid-expanded .grid td:nth-child(8),
+body.is-grid-expanded .grid th[data-sort="vendido"],
+body.is-grid-expanded .grid td:nth-child(9) {
+  width: 7.5%;
+}
+body.is-grid-expanded .grid th[data-sort="situacao"],
+body.is-grid-expanded .grid td:nth-child(10) {
+  width: 11%;
+  max-width: none;
+}
+body.is-grid-expanded .grid th[data-sort="ranking"] button,
+body.is-grid-expanded .grid th[data-sort="situacao"] button {
+  max-width: none;
+}
+body.is-grid-expanded .badge {
+  max-width: none;
 }
 .grid th,
 .grid td {
@@ -1601,7 +1728,7 @@ button.portfolio-ignore-btn.is-restore:hover {
 }
 
 .grid th[data-sort="situacao"],
-.grid td:nth-child(8) {
+.grid td:nth-child(10) {
   width: 118px;
   max-width: 118px;
 }
