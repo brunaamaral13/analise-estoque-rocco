@@ -911,7 +911,10 @@
       els.rankMeta.textContent = `${state.ranking.length.toLocaleString("pt-BR")} títulos no ranking (1 a ${last})`;
       // Ranking novo: agregados da carteira precisam ser recalculados.
       invalidatePortfolioOverview();
-      if (state.clients.length) render();
+      if (state.clients.length) {
+        if (isPortalContext()) selectPortalClientAuto();
+        else render();
+      }
     } catch (err) {
       console.error(err);
       els.rankMeta.textContent = "Não foi possível carregar o ranking. Abra o dashboard por um servidor local (não pelo file://).";
@@ -937,8 +940,11 @@
       if (state.selectedClient?.codigo && state.mapaRows.length) {
         selectClient(state.selectedClient.codigo);
       } else if (state.clients.length) {
-        invalidatePortfolioOverview();
-        render();
+        if (isPortalContext()) selectPortalClientAuto();
+        else {
+          invalidatePortfolioOverview();
+          render();
+        }
       }
     } catch (err) {
       console.error(err);
@@ -4055,8 +4061,104 @@
     });
   }
 
-  initSellerGate();
-  loadRanking();
-  loadCoverPrices();
-  loadPromos();
+  const portalMode = new URLSearchParams(location.search).get("portal") === "1";
+
+  function isPortalContext() {
+    return portalMode || document.body.classList.contains("is-portal");
+  }
+
+  function selectPortalClientAuto() {
+    if (!isPortalContext() || !state.clients?.length) return false;
+    const code = state.clients[0]?.codigo;
+    if (!code) return false;
+    if (state.selectedClient?.codigo === String(code)) return true;
+    selectClient(code);
+    return Boolean(state.selectedClient);
+  }
+
+  // Expõe para o shell do portal forçar o cruzamento via iframe
+  window.__portalSelectFirstClient = selectPortalClientAuto;
+
+  async function ingestMapaBuffer(buffer, name) {
+    const fileName = name || "mapa.xlsx";
+    const file = new File([buffer], fileName, {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    await onMapaFile(file);
+    // Portal: abre direto no cruzamento do cliente (Mapão Catavento)
+    selectPortalClientAuto();
+    requestAnimationFrame(() => selectPortalClientAuto());
+    setTimeout(() => selectPortalClientAuto(), 250);
+    setTimeout(() => selectPortalClientAuto(), 1000);
+    setTimeout(() => selectPortalClientAuto(), 2500);
+  }
+
+  function enterPortalClient(label) {
+    const name = String(label || "Cliente").trim() || "Cliente";
+    state.seller = name;
+    state.sellerPick = name;
+    if (els.sellerNameLabel) els.sellerNameLabel.textContent = name;
+    if (els.sellerGate) els.sellerGate.hidden = true;
+    if (els.appShell) els.appShell.hidden = false;
+    if (els.btnImport) {
+      els.btnImport.disabled = true;
+      els.btnImport.hidden = true;
+    }
+    if (els.btnImportMain) {
+      els.btnImportMain.disabled = true;
+      els.btnImportMain.hidden = true;
+    }
+    if (els.btnChangeSeller) els.btnChangeSeller.hidden = true;
+    if (els.topSub && !state.selectedClient) {
+      els.topSub.textContent = "Base disponibilizada pela Rocco · somente visualização (exportação liberada).";
+    }
+    const importPanel = document.querySelector(".panel-import");
+    if (importPanel) {
+      const title = importPanel.querySelector(".panel-title");
+      const note = importPanel.querySelector(".panel-note");
+      if (title) title.textContent = "Base do cliente";
+      if (note) note.textContent = "Atualizada pela Rocco. Você pode exportar o cruzamento em Excel.";
+    }
+  }
+
+  function bootPortalMode() {
+    document.body.classList.add("is-portal");
+    window.addEventListener("message", async (event) => {
+      if (event.origin !== location.origin) return;
+      const data = event.data || {};
+      if (data.type === "estoque-init") {
+        enterPortalClient(data.clientName || "Cliente");
+        parent.postMessage({ type: "estoque-ready" }, location.origin);
+      }
+      if (data.type === "estoque-mapa" && data.buffer) {
+        try {
+          if (!state.seller) enterPortalClient(data.clientName || "Cliente");
+          await ingestMapaBuffer(data.buffer, data.name);
+          parent.postMessage({ type: "estoque-mapa-ready" }, location.origin);
+        } catch (err) {
+          parent.postMessage({
+            type: "estoque-error",
+            message: err?.message || "Não foi possível carregar o Mapão.",
+          }, location.origin);
+        }
+      }
+      if (data.type === "estoque-select-first") {
+        document.body.classList.add("is-portal");
+        selectPortalClientAuto();
+      }
+    });
+    loadRanking();
+    loadCoverPrices();
+    loadPromos();
+    parent.postMessage({ type: "estoque-boot" }, location.origin);
+  }
+
+  if (portalMode) {
+    bootPortalMode();
+  } else {
+    initSellerGate();
+    loadRanking();
+    loadCoverPrices();
+    loadPromos();
+  }
 })();

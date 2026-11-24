@@ -2057,3 +2057,52 @@ body.is-grid-expanded .badge {
   .title-search-wrap,
   .search { width: 100%; }
 }
+
+/* Portal do cliente: sem importação; exportação permanece */
+body.is-portal .seller-gate { display: none !important; }
+body.is-portal #btnImport,
+body.is-portal #btnImportMain,
+body.is-portal #btnChangeSeller,
+body.is-portal #fileMapa {
+  display: none !important;
+}
+body.is-portal .panel-import .panel-note {
+  margin-top: 0;
+}
+body.is-portal #btnExportGrid {
+  display: inline-flex;
+}
+
+/* Portal: sidebar e seletor de cliente/vendedor — o shell do portal já identifica o cliente */
+body.is-portal .sidebar,
+body.is-portal .sidebar-show-btn {
+  display: none !important;
+}
+body.is-portal .app {
+  grid-template-columns: 1fr !important;
+}
+body.is-portal .main {
+  margin-left: 0 !important;
+  max-width: none;
+}
+body.is-portal #clientBar .client-bar-head,
+body.is-portal #clientBar .client-bar-controls,
+body.is-portal #clientBar .coverage-mode {
+  display: none !important;
+}
+body.is-portal #clientBar {
+  padding-top: 8px;
+}
+body.is-portal #clientBar .client-bar-secondary {
+  margin-top: 0;
+}
+body.is-portal #mainActiveFilters,
+body.is-portal .active-filters-bar,
+body.is-portal .clear-filters-main,
+body.is-portal #btnClearFiltersMain,
+body.is-portal #btnPortfolioDetails,
+body.is-portal .portfolio-expand-toggle,
+body.is-portal #portfolioDetails,
+body.is-portal #portfolioOverview {
+  display: none !important;
+}
