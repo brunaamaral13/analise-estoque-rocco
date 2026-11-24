@@ -379,8 +379,8 @@
             </div>
             <div class="grid-toolbar-actions">
               <button type="button" class="grid-expand-btn" id="btnExportGrid" disabled>Exportar Excel</button>
-              <button type="button" class="grid-expand-btn" id="btnToggleStockCols" aria-pressed="false">
-                <span class="grid-stock-cols-label">Ocultar estoque extra</span>
+              <button type="button" class="grid-expand-btn" id="btnToggleStockCols" aria-pressed="true">
+                <span class="grid-stock-cols-label">Mostrar estoque extra</span>
               </button>
               <button type="button" class="grid-expand-btn" id="btnExpandGrid" aria-expanded="false" aria-controls="gridScroll">
                 <svg class="grid-expand-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4M16 4h4v4M8 20H4v-4M16 20h4v-4"/></svg>
@@ -389,7 +389,7 @@
             </div>
           </div>
           <div class="grid-scroll" id="gridScroll">
-            <table class="grid" id="grid">
+            <table class="grid is-consignado-only" id="grid">
               <thead>
                 <tr>
                   <th class="num sortable" data-sort="ranking" aria-sort="none"><button type="button">Ranking<br>Rocco</button></th>

@@ -180,7 +180,7 @@
     portfolioOverview: null,
     portfolioDetailsOpen: false,
     gridExpanded: false,
-    consignadoOnlyCols: false,
+    consignadoOnlyCols: true,
     sidebarCollapsed: loadSidebarCollapsed(),
     coverageMode: loadCoverageMode(),
     portfolioClientFilter: null,
